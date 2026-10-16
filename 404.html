@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Not found · Deep Field</title>
+<meta name="description" content="There is nothing at this address. The way back to Deep Field.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#03030a">
+<meta name="color-scheme" content="dark">
+<!-- GitHub Pages serves this page for any missing path, at any depth, so the
+     links below start from the site root rather than from here. -->
+<link rel="icon" href="/deep-field/assets/icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/deep-field/assets/icons/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/deep-field/assets/icons/apple-touch-icon.png">
+<style>
+  :root{
+    --bg:#03030a;--ink:#e7e4f2;--dim:rgba(200,196,228,.62);--soft:rgba(200,196,228,.6);
+    --focus:rgba(220,215,255,.8);--ease:cubic-bezier(.22,.61,.36,1);
+  }
+  *{box-sizing:border-box}
+  html{background:var(--bg);-webkit-text-size-adjust:100%}
+  body{
+    margin:0;min-height:100vh;min-height:100dvh;
+    color:var(--ink);background:var(--bg);
+    font-family:Georgia,"Times New Roman",serif;-webkit-font-smoothing:antialiased;
+    display:grid;place-items:center;text-align:center;
+    padding:calc(24px + env(safe-area-inset-top,0px)) calc(22px + env(safe-area-inset-right,0px))
+            calc(24px + env(safe-area-inset-bottom,0px)) calc(22px + env(safe-area-inset-left,0px));
+  }
+  .haze{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(60% 45% at 78% 18%, rgba(70,60,140,.16), transparent 70%),
+      radial-gradient(50% 40% at 12% 82%, rgba(40,70,120,.13), transparent 70%),
+      radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,.55));
+  }
+  #sky{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block;pointer-events:none}
+  main{position:relative;z-index:1;max-width:32rem}
+  .code{margin:0 0 1.2rem;font-size:.72rem;letter-spacing:.3em;text-indent:.3em;color:var(--soft)}
+  h1{
+    margin:0;font-weight:normal;font-size:clamp(1.9rem,6.5vw,3.2rem);
+    letter-spacing:.18em;text-indent:.18em;text-transform:uppercase;color:#f1eefa;text-wrap:balance;
+    text-shadow:0 0 40px rgba(150,140,230,.25);
+  }
+  p{margin:1.1rem auto 0;font-size:clamp(.95rem,2.4vw,1.08rem);line-height:1.7;letter-spacing:.04em;color:var(--dim);font-style:italic}
+  a{
+    display:inline-block;margin-top:2rem;padding:14px 18px;
+    font-size:.9rem;letter-spacing:.1em;color:var(--soft);text-decoration:none;
+    border:1px solid rgba(190,186,232,.18);border-radius:999px;
+    -webkit-tap-highlight-color:transparent;
+    transition:color .3s ease,border-color .3s ease,box-shadow .5s var(--ease);
+  }
+  a:hover,a:focus-visible{color:var(--ink);border-color:rgba(205,200,255,.4);box-shadow:0 0 30px -8px rgba(130,120,220,.5);outline:none}
+  a:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+  .rise{opacity:0;transform:translateY(10px);animation:rise 1.4s var(--ease) forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.rise{animation:none;opacity:1;transform:none}a{transition:none}}
+</style>
+</head>
+<body>
+<div class="haze"></div>
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<main>
+  <p class="code rise">404</p>
+  <h1 class="rise" style="animation-delay:.15s">Nothing out here</h1>
+  <p class="rise" style="animation-delay:.3s">This part of the sky is empty.</p>
+  <a id="home" class="rise" style="animation-delay:.5s" href="/deep-field/">&lsaquo; Deep Field</a>
+</main>
+
+<script>
+/* served from a local folder rather than GitHub Pages, the site root is just "/" */
+if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') document.getElementById('home').href = '/';
+
+/* the same slow starfield as the hub, drawn from small pre-made sprites */
+(() => {
+  const cv = document.getElementById('sky');
+  const g = cv.getContext('2d');
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+  let W = 0, H = 0, dpr = 1, stars = [], raf = 0, last = 0;
+  let seed = 20261016;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const TINTS = ['255,255,255', '214,222,255', '255,236,214', '226,214,255'];
+  const SPRITE = 32, MID = SPRITE / 2;
+  const sprites = TINTS.map(c => {
+    const s = document.createElement('canvas'); s.width = s.height = SPRITE;
+    const x = s.getContext('2d');
+    const grd = x.createRadialGradient(MID, MID, 0, MID, MID, MID);
+    grd.addColorStop(0, `rgba(${c},1)`);
+    grd.addColorStop(0.55, `rgba(${c},1)`);
+    grd.addColorStop(0.75, `rgba(${c},.5)`);
+    grd.addColorStop(1, `rgba(${c},0)`);
+    x.fillStyle = grd; x.fillRect(0, 0, SPRITE, SPRITE);
+    return s;
+  });
+  function build() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    seed = 20261016;
+    const n = Math.round(Math.min(900, (W * H) / 1700));
+    stars = [];
+    for (let i = 0; i < n; i++) {
+      const depth = rnd();
+      const r = 0.25 + depth * depth * 1.15;
+      stars.push({
+        x: rnd() * W, y: rnd() * H, d: r * 2.8, halo: r > 1.1 ? r * 7 : 0,
+        a: 0.18 + depth * 0.62 * (0.5 + rnd() * 0.5), v: 0.6 + depth * 3.2,
+        tw: rnd() * Math.PI * 2, ts: 0.25 + rnd() * 0.9,
+        sp: sprites[(rnd() * TINTS.length) | 0],
+      });
+    }
+  }
+  function draw(t, dt) {
+    g.clearRect(0, 0, W, H);
+    for (const s of stars) {
+      if (dt) {
+        s.x -= s.v * dt; s.y -= s.v * 0.28 * dt;
+        if (s.x < -4) s.x += W + 8;
+        if (s.y < -4) s.y += H + 8;
+      }
+      const a = s.a * (0.78 + 0.22 * Math.sin(s.tw + t * s.ts));
+      g.globalAlpha = a;
+      g.drawImage(s.sp, s.x - s.d / 2, s.y - s.d / 2, s.d, s.d);
+      if (s.halo) { g.globalAlpha = a * 0.08; g.drawImage(s.sp, s.x - s.halo / 2, s.y - s.halo / 2, s.halo, s.halo); }
+    }
+    g.globalAlpha = 1;
+  }
+  function frame(now) {
+    const t = now / 1000, dt = last ? Math.min(t - last, 0.1) : 0;
+    last = t; draw(t, dt); raf = requestAnimationFrame(frame);
+  }
+  function start() {
+    cancelAnimationFrame(raf); last = 0;
+    if (still.matches || document.hidden) { draw(0, 0); return; }
+    raf = requestAnimationFrame(frame);
+  }
+  let rz;
+  addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { build(); start(); }, 150); });
+  document.addEventListener('visibilitychange', start);
+  still.addEventListener?.('change', start);
+  build(); start();
+})();
+</script>
+</body>
+</html>
