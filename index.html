@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deep Field</title>
+<meta name="description" content="Quiet, interactive simulations of the space around us: the solar system as it is today, a wormhole to Saturn, and more to come.">
+<meta name="theme-color" content="#03030a">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="Deep Field">
+<meta property="og:description" content="Quiet, interactive simulations of the space around us.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://w00l23.github.io/deep-field/">
+<meta property="og:image" content="https://w00l23.github.io/deep-field/assets/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2303030a'/%3E%3Ccircle cx='32' cy='32' r='7' fill='%23f6d9a8'/%3E%3Cellipse cx='32' cy='32' rx='22' ry='9' fill='none' stroke='%23c9c4ea' stroke-opacity='.55' stroke-width='2'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#03030a;
+    --ink:#e7e4f2;
+    --dim:rgba(200,196,228,.62);
+    --faint:rgba(200,196,228,.38);
+    --line:rgba(190,186,232,.14);
+    --line-hi:rgba(205,200,255,.32);
+    --glass:rgba(14,14,30,.52);
+    --sat:env(safe-area-inset-top,0px);
+    --sab:env(safe-area-inset-bottom,0px);
+    --sal:env(safe-area-inset-left,0px);
+    --sar:env(safe-area-inset-right,0px);
+    --ease:cubic-bezier(.22,.61,.36,1);
+  }
+  *{box-sizing:border-box}
+  html{background:var(--bg);-webkit-text-size-adjust:100%}
+  body{
+    margin:0;min-height:100vh;min-height:100dvh;
+    color:var(--ink);background:var(--bg);
+    font-family:Georgia,"Times New Roman",serif;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+
+  /* the sky: a far, faint haze under a canvas of slowly drifting stars */
+  .haze{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(60% 45% at 78% 18%, rgba(70,60,140,.16), transparent 70%),
+      radial-gradient(50% 40% at 12% 82%, rgba(40,70,120,.13), transparent 70%),
+      radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,.55));
+  }
+  #sky{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block;pointer-events:none}
+
+  main{
+    position:relative;z-index:1;
+    max-width:1120px;margin:0 auto;
+    padding:calc(14vh + var(--sat)) calc(22px + var(--sar)) calc(40px + var(--sab)) calc(22px + var(--sal));
+  }
+
+  header{text-align:center;margin-bottom:clamp(44px,9vh,88px)}
+  h1{
+    margin:0;font-weight:normal;
+    font-size:clamp(2.5rem,7.5vw,4.6rem);
+    letter-spacing:.2em;text-indent:.2em; /* keeps wide-spaced words centred */
+    text-transform:uppercase;
+    color:#f1eefa;
+    text-shadow:0 0 40px rgba(150,140,230,.25);
+  }
+  .tag{
+    margin:1.1rem auto 0;max-width:30rem;
+    font-size:clamp(.95rem,2.4vw,1.08rem);line-height:1.7;letter-spacing:.04em;
+    color:var(--dim);font-style:italic;
+  }
+
+  .cards{
+    list-style:none;margin:0;padding:0;
+    display:grid;gap:clamp(18px,2.6vw,28px);
+    grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));
+  }
+  .card{
+    position:relative;
+    border:1px solid var(--line);border-radius:18px;overflow:hidden;
+    background:var(--glass);
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+    transition:border-color .5s var(--ease),transform .6s var(--ease),box-shadow .6s var(--ease);
+  }
+  .card:hover,.card:focus-within{
+    border-color:var(--line-hi);transform:translateY(-3px);
+    box-shadow:0 18px 50px -20px rgba(120,110,220,.35);
+  }
+  .shot{position:relative;aspect-ratio:16/10;overflow:hidden;background:#05050d}
+  .shot img{
+    width:100%;height:100%;object-fit:cover;display:block;
+    transform:scale(1.02);transition:transform 2.4s var(--ease),opacity .6s ease;
+  }
+  .card:hover .shot img,.card:focus-within .shot img{transform:scale(1.07)}
+  .shot::after{ /* sinks the picture's lower edge into the card */
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(to bottom,transparent 55%,rgba(8,8,20,.65));
+  }
+  .body{padding:18px 20px 20px}
+  .card h2{margin:0;font-weight:normal;font-size:1.28rem;letter-spacing:.06em}
+  .card p{margin:.5rem 0 0;font-size:.93rem;line-height:1.6;color:var(--dim)}
+  /* the whole card is the link; the stretched ::after takes the tap */
+  .go{color:inherit;text-decoration:none;outline:none}
+  .go::after{content:"";position:absolute;inset:0;z-index:1;border-radius:18px}
+  .go:focus-visible::after{outline:1px solid rgba(220,215,255,.6);outline-offset:-3px}
+  .also{
+    position:relative;z-index:2; /* above the stretched link */
+    display:inline-block;margin-top:.85rem;padding:6px 0;
+    font-size:.82rem;letter-spacing:.06em;color:var(--faint);text-decoration:none;
+    transition:color .3s ease;
+  }
+  .also:hover,.also:focus-visible{color:var(--ink);outline:none}
+
+  .soon{
+    position:absolute;z-index:2;top:12px;right:12px;
+    font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;
+    padding:6px 10px;border-radius:999px;
+    color:var(--dim);background:rgba(10,10,24,.6);border:1px solid var(--line);
+  }
+  /* Scale Zoom has no picture yet: rings of scale, slowly falling inward */
+  .rings{position:absolute;inset:0;display:grid;place-items:center;
+    background:radial-gradient(circle at 50% 50%,rgba(90,80,170,.18),transparent 60%)}
+  .rings i{
+    position:absolute;width:20%;aspect-ratio:1;border-radius:50%;
+    border:1px solid rgba(200,196,240,.5);
+    animation:fall 9s linear infinite;opacity:0;
+  }
+  .rings i:nth-child(2){animation-delay:-1.8s}
+  .rings i:nth-child(3){animation-delay:-3.6s}
+  .rings i:nth-child(4){animation-delay:-5.4s}
+  .rings i:nth-child(5){animation-delay:-7.2s}
+  .rings b{width:5px;height:5px;border-radius:50%;background:#f1eefa;box-shadow:0 0 14px 3px rgba(190,180,255,.6)}
+  @keyframes fall{
+    0%{transform:scale(5.5);opacity:0}
+    25%{opacity:.5}
+    85%{opacity:.25}
+    100%{transform:scale(.15);opacity:0}
+  }
+  .card.later{cursor:default}
+  .card.later:hover{transform:none}
+
+  footer{
+    margin-top:clamp(56px,10vh,96px);text-align:center;
+    font-size:.8rem;letter-spacing:.12em;color:var(--faint);
+  }
+  footer span{margin:0 .5em;opacity:.6}
+
+  /* arrival: everything rises out of the dark, one after another */
+  .rise{opacity:0;transform:translateY(10px);animation:rise 1.4s var(--ease) forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+
+  @media (prefers-reduced-motion:reduce){
+    .rise{animation:none;opacity:1;transform:none}
+    .rings i{animation:none;opacity:.35}
+    .rings i:nth-child(1){transform:scale(4)}
+    .rings i:nth-child(2){transform:scale(2.6)}
+    .rings i:nth-child(3){transform:scale(1.6)}
+    .rings i:nth-child(4){transform:scale(.9)}
+    .card,.shot img{transition:none}
+  }
+</style>
+</head>
+<body>
+<div class="haze"></div>
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<main>
+  <header>
+    <h1 class="rise">Deep Field</h1>
+    <p class="tag rise" style="animation-delay:.25s">Quiet simulations of the space around us.</p>
+  </header>
+
+  <ul class="cards">
+    <li class="card rise" style="animation-delay:.5s">
+      <div class="shot"><img src="assets/previews/solar-system.webp" alt="The Sun and its planets on their orbits, seen from above at an angle" width="960" height="600"></div>
+      <div class="body">
+        <h2><a class="go" href="solar-system/">Solar System</a></h2>
+        <p>The Sun, its planets and their moons, where they really are today.</p>
+        <a class="also" href="solar-system/original/">the original sketch &rsaquo;</a>
+      </div>
+    </li>
+
+    <li class="card rise" style="animation-delay:.65s">
+      <div class="shot"><img src="assets/previews/wormhole.webp" alt="A small ship with glowing engines flying past the Earth" width="960" height="600" loading="lazy"></div>
+      <div class="body">
+        <h2><a class="go" href="wormhole/">Wormhole</a></h2>
+        <p>A small ship leaves Earth, tears space open and comes out at Saturn.</p>
+      </div>
+    </li>
+
+    <li class="card later rise" style="animation-delay:.8s">
+      <div class="shot" aria-hidden="true">
+        <div class="rings"><i></i><i></i><i></i><i></i><i></i><b></b></div>
+      </div>
+      <span class="soon">Coming soon</span>
+      <div class="body">
+        <h2>Scale Zoom</h2>
+        <p>From the width of an atom to the edge of the observable universe.</p>
+      </div>
+    </li>
+  </ul>
+
+  <footer class="rise" style="animation-delay:1s">w00l23<span>&middot;</span>Mina Systems</footer>
+</main>
+
+<script>
+/* A slow starfield: three depths drifting at different speeds, each star
+   breathing a little. Still when the reader prefers less motion, and asleep
+   when the tab is hidden. */
+(() => {
+  const cv = document.getElementById('sky');
+  const g = cv.getContext('2d');
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+  let W = 0, H = 0, dpr = 1, stars = [], raf = 0, last = 0;
+
+  // a soft, deterministic random so the sky is the same sky each visit
+  let seed = 20261016;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+
+  const TINTS = ['255,255,255', '214,222,255', '255,236,214', '226,214,255'];
+
+  function build() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    seed = 20261016;
+    const n = Math.round(Math.min(900, (W * H) / 1700));
+    stars = [];
+    for (let i = 0; i < n; i++) {
+      const depth = rnd();                      // 0 far .. 1 near
+      stars.push({
+        x: rnd() * W, y: rnd() * H,
+        r: 0.25 + depth * depth * 1.15,
+        a: 0.18 + depth * 0.62 * (0.5 + rnd() * 0.5),
+        v: 0.6 + depth * 3.2,                   // px per second
+        tw: rnd() * Math.PI * 2, ts: 0.25 + rnd() * 0.9,
+        c: TINTS[(rnd() * TINTS.length) | 0],
+      });
+    }
+  }
+
+  function draw(t, dt) {
+    g.clearRect(0, 0, W, H);
+    for (const s of stars) {
+      if (dt) {
+        s.x -= s.v * dt; s.y -= s.v * 0.28 * dt;  // drifting up and to the left
+        if (s.x < -2) s.x += W + 4;
+        if (s.y < -2) s.y += H + 4;
+      }
+      const a = s.a * (0.78 + 0.22 * Math.sin(s.tw + t * s.ts));
+      g.fillStyle = `rgba(${s.c},${a.toFixed(3)})`;
+      g.beginPath(); g.arc(s.x, s.y, s.r, 0, 6.2832); g.fill();
+      if (s.r > 1.1) {                           // the nearest few get a faint glow
+        g.fillStyle = `rgba(${s.c},${(a * 0.07).toFixed(3)})`;
+        g.beginPath(); g.arc(s.x, s.y, s.r * 2.4, 0, 6.2832); g.fill();
+      }
+    }
+  }
+
+  function frame(now) {
+    const t = now / 1000, dt = last ? Math.min(t - last, 0.1) : 0;
+    last = t;
+    draw(t, dt);
+    raf = requestAnimationFrame(frame);
+  }
+
+  function start() {
+    cancelAnimationFrame(raf); last = 0;
+    if (still.matches || document.hidden) { draw(0, 0); return; }
+    raf = requestAnimationFrame(frame);
+  }
+
+  let rz;
+  addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { build(); start(); }, 150); });
+  document.addEventListener('visibilitychange', start);
+  still.addEventListener?.('change', start);
+  build(); start();
+})();
+</script>
+</body>
+</html>
