@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Solar System</title>
+<style>
+  :root{
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    --ink:#e7e4f2;
+    --dim:#6b6780;
+  }
+  *{box-sizing:inherit;margin:0;padding:0}
+  html,body{height:100%;background:#03030a;overflow:hidden}
+  body{
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    color:var(--ink);
+    -webkit-tap-highlight-color:transparent;
+  }
+  canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+  canvas.dragging{cursor:grabbing}
+
+  .hint{
+    position:fixed;
+    left:50%;
+    transform:translateX(-50%);
+    bottom:calc(1.4rem + env(safe-area-inset-bottom,0px));
+    font-size:.78rem;
+    letter-spacing:.06em;
+    color:var(--dim);
+    pointer-events:none;
+    transition:opacity 1.2s ease;
+    text-align:center;
+    line-height:1.7;
+  }
+  .hint.gone{opacity:0}
+
+  .name{
+    position:fixed;
+    padding:.15rem .1rem;
+    font-size:.8rem;
+    letter-spacing:.08em;
+    color:var(--ink);
+    pointer-events:none;
+    opacity:0;
+    transition:opacity .35s ease;
+    text-shadow:0 0 12px rgba(0,0,0,.9);
+    white-space:nowrap;
+  }
+  .name.on{opacity:.85}
+
+  @media (prefers-reduced-motion: reduce){
+    .hint{transition:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="name" id="label"></div>
+<p class="hint" id="hint">drag to turn &nbsp;·&nbsp; scroll to come closer</p>
+
+<script>
+(function(){
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+  const hint = document.getElementById('hint');
+  const label = document.getElementById('label');
+
+  let W = 0, H = 0, DPR = 1;
+
+  // --- the bodies -------------------------------------------------
+  // r  : orbit radius, compressed so the outer ones stay on screen
+  // p  : orbital period, real ratios (earth = 1)
+  // s  : drawn size
+  // c  : colour
+  const SUN = { c:'#ffd9a0' };
+  const PLANETS = [
+    { name:'Mercury', r: 0.11, p:   0.24, s: 1.9, c:'#9b8f84' },
+    { name:'Venus',   r: 0.17, p:   0.62, s: 3.4, c:'#e0b981' },
+    { name:'Earth',   r: 0.24, p:   1.00, s: 3.6, c:'#6fa8dc' },
+    { name:'Mars',    r: 0.32, p:   1.88, s: 2.6, c:'#c1614a' },
+    { name:'Jupiter', r: 0.48, p:  11.86, s: 9.0, c:'#d2a679' },
+    { name:'Saturn',  r: 0.62, p:  29.46, s: 7.6, c:'#e3cb9a', ring:true },
+    { name:'Uranus',  r: 0.78, p:  84.01, s: 5.2, c:'#9fd6d8' },
+    { name:'Neptune', r: 0.92, p: 164.80, s: 5.0, c:'#6d8fd6' }
+  ];
+  PLANETS.forEach((b,i) => { b.a = Math.random() * Math.PI * 2; b.trail = []; });
+
+  // --- camera -----------------------------------------------------
+  let tilt = 1.02;        // radians from edge-on
+  let azim = 0.4;
+  let zoom = 1;
+  let spin = 0;           // slow idle turn
+
+  // --- stars ------------------------------------------------------
+  let stars = [];
+  function seedStars(){
+    stars = [];
+    const n = Math.round(Math.min(340, (W*H)/5200));
+    for(let i=0;i<n;i++){
+      stars.push({
+        x: Math.random(), y: Math.random(),
+        m: Math.random()*0.5 + 0.12,
+        f: Math.random()*0.0007 + 0.0002,
+        o: Math.random()*Math.PI*2
+      });
+    }
+  }
+
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    seedStars();
+  }
+  window.addEventListener('resize', resize);
+
+  // --- projection -------------------------------------------------
+  // a point on the flat orbital plane, seen from a tilted camera
+  function project(ox, oz){
+    const ca = Math.cos(azim + spin), sa = Math.sin(azim + spin);
+    const x =  ox*ca - oz*sa;
+    const z =  ox*sa + oz*ca;
+    const st = Math.sin(tilt), ct = Math.cos(tilt);
+    const unit = Math.min(W,H) * 0.46 * zoom;
+    return {
+      x: W/2 + x*unit,
+      y: H/2 + z*st*unit,
+      depth: -z*ct          // bigger = nearer the viewer
+    };
+  }
+
+  // --- drawing ----------------------------------------------------
+  function glow(x, y, radius, colour, strength){
+    const g = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    g.addColorStop(0, colour);
+    g.addColorStop(0.35, colour.replace('rgb(', 'rgba(').replace(')', ',' + (strength*0.45) + ')'));
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  function hexToRgb(h){
+    const n = parseInt(h.slice(1),16);
+    return [n>>16 & 255, n>>8 & 255, n & 255];
+  }
+
+  function drawOrbit(b){
+    ctx.beginPath();
+    const steps = 96;
+    for(let i=0;i<=steps;i++){
+      const t = i/steps*Math.PI*2;
+      const p = project(Math.cos(t)*b.r, Math.sin(t)*b.r);
+      i ? ctx.lineTo(p.x,p.y) : ctx.moveTo(p.x,p.y);
+    }
+    ctx.strokeStyle = 'rgba(150,150,200,0.085)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  function drawRing(b, p, scale){
+    const rr = b.s*scale*2.1;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(1, Math.max(0.06, Math.sin(tilt)));
+    ctx.beginPath();
+    ctx.arc(0, 0, rr, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(227,203,154,0.5)';
+    ctx.lineWidth = Math.max(1, b.s*scale*0.55);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  let last = performance.now();
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function frame(now){
+    const dt = Math.min(now - last, 64);
+    last = now;
+
+    if(!dragging && !reduced) spin += dt * 0.000018;
+
+    // move the planets — real period ratios, sped right up
+    for(const b of PLANETS){
+      b.a += (dt * 0.00022) / b.p;
+      const p = project(Math.cos(b.a)*b.r, Math.sin(b.a)*b.r);
+      b.px = p.x; b.py = p.y; b.pd = p.depth;
+    }
+
+    // background
+    ctx.fillStyle = '#03030a';
+    ctx.fillRect(0,0,W,H);
+
+    // stars
+    for(const s of stars){
+      const tw = 0.7 + 0.3*Math.sin(now*s.f + s.o);
+      ctx.fillStyle = 'rgba(232,230,245,' + (s.m*tw).toFixed(3) + ')';
+      ctx.fillRect(s.x*W, s.y*H, 1.2, 1.2);
+    }
+
+    ctx.globalCompositeOperation = 'lighter';
+
+    // orbit lines, under everything
+    ctx.globalCompositeOperation = 'source-over';
+    for(const b of PLANETS) drawOrbit(b);
+    ctx.globalCompositeOperation = 'lighter';
+
+    // sun
+    const unit = Math.min(W,H)*0.46*zoom;
+    const sunR = Math.max(6, unit*0.035);
+    glow(W/2, H/2, sunR*7, 'rgb(255,190,110)', 0.5);
+    ctx.fillStyle = '#fff2d8';
+    ctx.beginPath(); ctx.arc(W/2, H/2, sunR, 0, Math.PI*2); ctx.fill();
+
+    // planets, far ones first
+    const order = PLANETS.slice().sort((a,b) => a.pd - b.pd);
+    const scale = Math.max(0.55, Math.min(2.2, zoom));
+    for(const b of order){
+      const near = 0.72 + 0.28 * (b.pd/b.r*0.5 + 0.5);   // slightly bigger when nearer
+      const rad = b.s * scale * near;
+      const [r,g,bl] = hexToRgb(b.c);
+      glow(b.px, b.py, rad*5, 'rgb('+r+','+g+','+bl+')', 0.35);
+      if(b.ring) drawRing(b, {x:b.px,y:b.py}, scale*near);
+      ctx.fillStyle = b.c;
+      ctx.beginPath(); ctx.arc(b.px, b.py, rad, 0, Math.PI*2); ctx.fill();
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+    requestAnimationFrame(frame);
+  }
+
+  // --- input ------------------------------------------------------
+  let dragging = false, lx = 0, ly = 0, moved = 0;
+
+  function down(x,y){ dragging = true; lx = x; ly = y; moved = 0; cv.classList.add('dragging'); fadeHint(); }
+  function move(x,y){
+    if(!dragging) return;
+    const dx = x - lx, dy = y - ly;
+    lx = x; ly = y; moved += Math.abs(dx)+Math.abs(dy);
+    azim += dx * 0.005;
+    tilt = Math.max(0.06, Math.min(1.5, tilt + dy * 0.004));
+  }
+  function up(x,y){
+    dragging = false; cv.classList.remove('dragging');
+    if(moved < 6 && x !== undefined) tap(x,y);
+  }
+
+  cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); down(e.clientX, e.clientY); });
+  cv.addEventListener('pointermove', e => move(e.clientX, e.clientY));
+  cv.addEventListener('pointerup',   e => up(e.clientX, e.clientY));
+  cv.addEventListener('pointercancel', () => up());
+
+  cv.addEventListener('wheel', e => {
+    e.preventDefault();
+    zoom = Math.max(0.45, Math.min(3.2, zoom * (e.deltaY > 0 ? 0.92 : 1.08)));
+    fadeHint();
+  }, {passive:false});
+
+  // pinch
+  let pinch = null;
+  cv.addEventListener('touchstart', e => {
+    if(e.touches.length === 2){
+      pinch = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      dragging = false;
+    }
+  }, {passive:true});
+  cv.addEventListener('touchmove', e => {
+    if(e.touches.length === 2 && pinch){
+      const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      zoom = Math.max(0.45, Math.min(3.2, zoom * (d/pinch)));
+      pinch = d;
+    }
+  }, {passive:true});
+  cv.addEventListener('touchend', () => { pinch = null; });
+
+  // tap a planet to see its name for a moment
+  let nameTimer = null;
+  function tap(x,y){
+    let hit = null, best = 26;
+    for(const b of PLANETS){
+      const d = Math.hypot(b.px-x, b.py-y);
+      if(d < best){ best = d; hit = b; }
+    }
+    if(!hit) return;
+    label.textContent = hit.name;
+    label.style.left = (hit.px + 14) + 'px';
+    label.style.top  = (hit.py - 10) + 'px';
+    label.classList.add('on');
+    clearTimeout(nameTimer);
+    nameTimer = setTimeout(() => label.classList.remove('on'), 2200);
+  }
+
+  let hintGone = false;
+  function fadeHint(){
+    if(hintGone) return;
+    hintGone = true;
+    hint.classList.add('gone');
+  }
+  setTimeout(fadeHint, 9000);
+
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+<!-- Deep Field: the way back to the hub -->
+<a id="df-back" href="../../" aria-label="Back to Deep Field">&lsaquo; Deep Field</a>
+<style>
+  #df-back{position:fixed;z-index:6;top:calc(8px + env(safe-area-inset-top,0px));left:calc(8px + env(safe-area-inset-left,0px));
+    padding:10px 12px;font:12px/1 Georgia,"Times New Roman",serif;letter-spacing:.08em;
+    color:rgba(222,218,242,.5);text-decoration:none;text-shadow:0 0 10px rgba(0,0,0,.9);
+    -webkit-tap-highlight-color:transparent;transition:color .3s ease,opacity .4s ease}
+  #df-back:hover,#df-back:focus-visible{color:rgba(240,236,255,.92);outline:none}
+</style>
+</body>
+</html>
