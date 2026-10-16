@@ -4,6 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Scale Zoom · Deep Field</title>
+<meta name="description" content="From the width of an atom to the edge of the observable universe. Coming soon to Deep Field.">
+<meta property="og:site_name" content="Deep Field">
+<meta property="og:title" content="Scale Zoom · Deep Field">
+<meta property="og:description" content="From the width of an atom to the edge of the observable universe. Coming soon to Deep Field.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://w00l23.github.io/deep-field/scale-zoom/">
+<meta property="og:image" content="https://w00l23.github.io/deep-field/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Sun and its planets on their orbits, seen from above at an angle">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../assets/icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../assets/icons/favicon.ico" sizes="32x32">
+<link rel="icon" href="../assets/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
 <meta name="theme-color" content="#03030a">
 <meta name="color-scheme" content="dark">
 <style>
@@ -12,16 +27,22 @@
     background:radial-gradient(55% 45% at 50% 50%,rgba(80,70,160,.16),transparent 70%),#03030a}
   h1{margin:0;font-weight:normal;font-size:clamp(1.8rem,6vw,2.8rem);letter-spacing:.18em;text-indent:.18em;text-transform:uppercase}
   p{margin:1rem 1.5rem 0;color:rgba(200,196,228,.62);font-style:italic;letter-spacing:.04em;line-height:1.7}
-  a{color:rgba(222,218,242,.5);text-decoration:none;letter-spacing:.08em;font-size:12px;
-    position:fixed;top:calc(8px + env(safe-area-inset-top,0px));left:calc(8px + env(safe-area-inset-left,0px));padding:10px 12px}
-  a:hover,a:focus-visible{color:rgba(240,236,255,.92);outline:none}
 </style>
 </head>
 <body>
-<a href="../" aria-label="Back to Deep Field">&lsaquo; Deep Field</a>
 <main>
   <h1>Scale Zoom</h1>
   <p>From the width of an atom to the edge of the observable universe.<br>Coming soon.</p>
 </main>
+<!-- Deep Field: the way back to the hub -->
+<a id="df-back" href="../" aria-label="Back to Deep Field">&lsaquo; Deep Field</a>
+<style>
+  #df-back{position:fixed;z-index:6;top:calc(2px + env(safe-area-inset-top,0px));left:calc(8px + env(safe-area-inset-left,0px));
+    padding:16px 12px;font:12px/1 Georgia,"Times New Roman",serif;letter-spacing:.08em;
+    color:rgba(222,218,242,.54);text-decoration:none;text-shadow:0 0 10px rgba(0,0,0,.9);
+    -webkit-tap-highlight-color:transparent;transition:color .3s ease,opacity .4s ease}
+  #df-back:hover,#df-back:focus-visible{color:rgba(240,236,255,.92)}
+  #df-back:focus-visible{outline:2px solid rgba(220,215,255,.8);outline-offset:-6px;border-radius:10px}
+</style>
 </body>
 </html>
