@@ -83,8 +83,16 @@
   .cards{
     list-style:none;margin:0;padding:0;
     display:grid;gap:clamp(18px,2.6vw,28px);
-    grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));
+    grid-template-columns:1fr; /* phone: one column */
   }
+  /* desktop: two by two, and three across only once there are six or more */
+  @media (min-width:640px){
+    .cards{grid-template-columns:repeat(2,1fr);max-width:900px;margin:0 auto}
+  }
+  @media (min-width:1000px){
+    .cards:has(> li:nth-child(6)){grid-template-columns:repeat(3,1fr);max-width:none}
+  }
+  .card.later{order:1} /* coming-soon cards always sit last */
   .card{
     position:relative;
     border:1px solid var(--line);border-radius:18px;overflow:hidden;
