@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rose Black Hole · Deep Field</title>
+<meta name="description" content="A black hole in deep space, wrapped in a rose and gold disk whose light bends over and under it. Drag to orbit, fly closer to find its edge.">
+<meta property="og:site_name" content="Deep Field">
+<meta property="og:title" content="Rose Black Hole · Deep Field">
+<meta property="og:description" content="A black hole in deep space, wrapped in a rose and gold disk whose light bends over and under it. Drag to orbit, fly closer to find its edge.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://w00l23.github.io/deep-field/black-hole/">
+<meta property="og:image" content="https://w00l23.github.io/deep-field/assets/og-black-hole.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A black hole with a glowing rose and gold disk bent over and under it, against faint stars">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../assets/icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../assets/icons/favicon.ico" sizes="32x32">
+<link rel="icon" href="../assets/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#03030a">
+<meta name="color-scheme" content="dark">
+<style>
+  :root{
+    --ink:#ece6f0;
+    --dim:rgba(222,210,228,.78);
+    --sab:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#000;color:var(--ink);overflow:hidden;
+    font-family:Georgia,"Times New Roman",serif;-webkit-font-smoothing:antialiased}
+  #view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;outline:none;
+    opacity:0;transition:opacity 3s ease}
+  #view.ready{opacity:1}
+  #view:active{cursor:grabbing}
+
+  /* arrival: a quiet name and how to move, gone after the first touch */
+  #title{
+    position:fixed;z-index:3;left:0;right:0;bottom:calc(30px + var(--sab));
+    text-align:center;pointer-events:none;opacity:0;
+    transition:opacity 2.6s ease .8s;
+  }
+  #title.on{opacity:1}
+  #title.off{opacity:0;transition:opacity 1.4s ease}
+  #title h1{
+    margin:0;font-weight:normal;
+    font-size:clamp(1rem,2.6vw,1.3rem);letter-spacing:.3em;text-indent:.3em;text-transform:uppercase;
+    color:rgba(240,232,240,.86);text-shadow:0 0 18px #000;
+  }
+  #hint{
+    margin:.8rem 1.5rem 0;font-size:.8rem;line-height:1.6;letter-spacing:.06em;font-style:italic;
+    color:var(--dim);text-shadow:0 0 12px #000;
+    opacity:0;transition:opacity 2s ease 2.4s;
+  }
+  #title.on #hint{opacity:1}
+
+  /* the layers, named as they come near: a hairline from a dot on the feature to its name */
+  #leads{position:fixed;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}
+  #leads g{opacity:0;transition:opacity 1.2s ease}
+  #leads g.on{opacity:1}
+  #leads g.dim{opacity:.4}
+  #leads line{stroke:rgba(236,226,236,.42);stroke-width:1}
+  #leads circle{fill:rgba(246,238,244,.9)}
+  #labels{position:fixed;inset:0;z-index:3;pointer-events:none}
+  .lab{
+    position:absolute;left:0;top:0;width:max-content;max-width:min(230px,58vw);
+    opacity:0;transition:opacity 1.2s ease;
+    text-shadow:0 0 8px #000,0 0 2px #000;
+  }
+  /* a soft pool of dark behind the words, so they read over the bright disk too */
+  .lab::before{content:"";position:absolute;inset:-16px -22px;z-index:-1;border-radius:50%;
+    background:radial-gradient(closest-side,rgba(0,0,0,.72),rgba(0,0,0,.45) 55%,transparent)}
+  .lab b{display:block;font-weight:normal;font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;color:rgba(244,236,242,.92)}
+  .lab i{display:block;margin-top:.35rem;font-size:.78rem;line-height:1.5;letter-spacing:.03em;color:var(--dim)}
+  .lab.on{opacity:1}
+  .lab.on.dim{opacity:.58}
+  .lab.dim i{display:none}
+  .lab.dim::before{opacity:.6}
+  .lab.ra{text-align:right}
+  .lab.ca{text-align:center}
+
+  .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* when the picture cannot be made at all */
+  #nogl{position:fixed;inset:0;z-index:4;display:none;place-items:center;text-align:center;padding:24px;
+    background:radial-gradient(55% 45% at 50% 50%,rgba(120,60,90,.16),transparent 70%),#000}
+  #nogl.show{display:grid}
+  #nogl p{margin:0;max-width:30rem;font-style:italic;letter-spacing:.04em;line-height:1.7;color:var(--dim)}
+
+  /* sound: two quiet line icons top-right, mirroring the way back top-left, and a small
+     card under them for the visitor's own song */
+  #ctl{position:fixed;z-index:6;top:calc(2px + env(safe-area-inset-top,0px));right:calc(8px + env(safe-area-inset-right,0px));display:flex}
+  .ctl{display:flex;align-items:center;justify-content:center;width:44px;height:44px;margin:0;padding:0;background:none;border:0;cursor:pointer;
+    color:rgba(222,218,242,.54);-webkit-tap-highlight-color:transparent;transition:color .3s ease}
+  .ctl svg{display:block;width:16px;height:16px;overflow:visible;fill:none;stroke:currentColor;stroke-width:1.2;
+    stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 4px rgba(0,0,0,.9))}
+  .ctl svg .fill{fill:currentColor;stroke:none}
+  #snd[aria-pressed="true"] .mute,#snd[aria-pressed="false"] .wave{display:none}
+  #mus.live{color:rgba(232,228,250,.74)}      /* a song of theirs is loaded */
+  .ctl:hover,.ctl:focus-visible{color:rgba(240,236,255,.92)}
+  .ctl:focus-visible{outline:2px solid rgba(220,215,255,.8);outline-offset:-6px;border-radius:10px}
+  #music{position:fixed;z-index:6;top:calc(48px + env(safe-area-inset-top,0px));right:calc(12px + env(safe-area-inset-right,0px));
+    width:min(250px,calc(100vw - 24px - env(safe-area-inset-right,0px)));padding:11px 14px 10px;
+    font:12px/1.5 Georgia,"Times New Roman",serif;letter-spacing:.04em;color:rgba(222,218,242,.7);text-shadow:0 0 8px rgba(0,0,0,.9);
+    background:rgba(6,4,12,.62);border:1px solid rgba(222,218,242,.12);border-radius:10px;
+    opacity:0;visibility:hidden;transition:opacity .6s ease,visibility 0s linear .6s}
+  #music.on{opacity:1;visibility:visible;transition:opacity .6s ease}
+  #music.on.rest{opacity:.5;transition-duration:1.6s}   /* rests after a while; comes back under the pointer */
+  #music.on.rest:hover,#music.on.rest:focus-within{opacity:1;transition-duration:.3s}
+  #mu-name{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:rgba(240,236,255,.86)}
+  #music.msg #mu-name{white-space:normal;font-style:italic;color:rgba(222,218,242,.74)}
+  #music.msg .row{display:none}
+  #music .row{display:flex;align-items:center;margin:2px -10px 0}
+  #music .row button{min-height:40px;padding:0 10px;background:none;border:0;cursor:pointer;
+    font:12px/1 Georgia,"Times New Roman",serif;letter-spacing:.08em;color:rgba(222,218,242,.6);
+    -webkit-tap-highlight-color:transparent;transition:color .3s ease}
+  #music .row button:hover,#music .row button:focus-visible{color:rgba(240,236,255,.92)}
+  #music .row button:focus-visible{outline:2px solid rgba(220,215,255,.8);outline-offset:-4px;border-radius:8px}
+  #mu-stop{margin-left:auto;min-width:40px}
+  @media (pointer:coarse){#music .row button{min-height:44px}#mu-stop{min-width:44px}}
+  #mu-note{display:block;margin-top:3px;font-size:11px;font-style:italic;color:rgba(222,218,242,.46)}
+
+  /* the footer: where the music came from. Hidden until the page is set up with a URL, and
+     on a narrow screen until the arrival words have gone from the bottom edge */
+  #playlist{position:fixed;z-index:6;right:calc(8px + env(safe-area-inset-right,0px));bottom:calc(2px + var(--sab));
+    padding:16px 12px;font:12px/1 Georgia,"Times New Roman",serif;letter-spacing:.08em;
+    color:rgba(222,218,242,.54);text-decoration:none;text-shadow:0 0 10px rgba(0,0,0,.9);
+    -webkit-tap-highlight-color:transparent;opacity:0;visibility:hidden;transition:color .3s ease,opacity 1.4s ease}
+  #playlist:hover,#playlist:focus-visible{color:rgba(240,236,255,.92)}
+  #playlist:focus-visible{outline:2px solid rgba(220,215,255,.8);outline-offset:-6px;border-radius:10px}
+  body.touched #playlist{opacity:1;visibility:visible}
+  @media (min-width:720px){#playlist{opacity:1;visibility:visible}}
+
+  @media (prefers-reduced-motion:reduce){
+    #view,#title,#title.off,#hint,.lab,#leads g,#music,#playlist{transition-duration:.2s;transition-delay:0s}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="view" role="img" tabindex="0" aria-describedby="keys" aria-label="A black hole seen from nearby. Its glowing rose and gold disk is bent by gravity so it arches over the top and under the bottom of a perfectly black circle, ringed by a thin bright line of light. Faint stars behind it are stretched near the edge."></canvas>
+<p id="keys" class="vh">Arrow keys orbit. Plus and minus fly closer and further.</p>
+
+<svg id="leads" aria-hidden="true">
+  <g id="ld-disk"><line/><circle r="1.6"/></g>
+  <g id="ld-ring"><line/><circle r="1.6"/></g>
+  <g id="ld-horizon"><line/><circle r="1.6"/></g>
+  <g id="ld-centre"><line/><circle r="1.6"/></g>
+</svg>
+
+<div id="labels">
+  <div class="lab" id="lab-disk"><b>Accretion disk</b><i>Gas spiralling in, hotter than the Sun&rsquo;s core. The inner edge laps the outer.</i></div>
+  <div class="lab" id="lab-ring"><b>Photon ring</b><i>Light caught circling the hole before it slips free.</i></div>
+  <div class="lab" id="lab-horizon"><b>Event horizon</b><i>Past this edge, nothing gets back out, not even light.</i></div>
+  <div class="lab" id="lab-centre"><b>The centre</b><i>The tiny dot we still can&rsquo;t see inside.</i></div>
+</div>
+<div id="live" class="vh" aria-live="polite"></div>
+
+<div id="title">
+  <h1>Rose Black Hole</h1>
+  <p id="hint">Drag to orbit <span aria-hidden="true">&middot;</span> scroll to fly closer</p>
+</div>
+
+<div id="nogl" role="status"><p>This page paints the black hole with WebGL, and this browser could not give it a canvas to paint on.</p></div>
+
+<div id="ctl">
+  <button id="snd" class="ctl" type="button" aria-label="Sound" aria-pressed="false" title="Sound"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6.2h2.6L8 3.2v9.6L4.6 9.8H2z"/><g class="wave"><path d="M10.6 5.9a3 3 0 0 1 0 4.2"/><path d="M12.6 4a5.6 5.6 0 0 1 0 8"/></g><path class="mute" d="M10.8 6.3l3.4 3.4M14.2 6.3l-3.4 3.4"/></svg></button>
+  <button id="mus" class="ctl" type="button" aria-label="Play your own music" aria-expanded="false" title="Play your own music"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7 12.4V2.6c.6 1.9 2.2 2.5 3.4 3.4 1.1.8 1.4 2.2.9 3.4"/><ellipse class="fill" cx="5" cy="12.6" rx="2.2" ry="1.6" transform="rotate(-22 5 12.6)"/></svg></button>
+</div>
+<input id="file" type="file" accept="audio/*" class="vh" tabindex="-1" aria-hidden="true">
+<audio id="song" playsinline webkit-playsinline preload="auto" hidden></audio>
+<div id="music" role="group" aria-label="Your music">
+  <span id="mu-name" aria-live="polite"></span>
+  <div class="row">
+    <button id="mu-pause" type="button">Pause</button>
+    <button id="mu-pick" type="button">Change</button>
+    <button id="mu-stop" type="button" aria-label="Stop" title="Stop">&#x2715;</button>
+  </div>
+  <small id="mu-note">Plays only on your device.</small>
+</div>
+<a id="playlist" target="_blank" rel="noopener" hidden>Listening playlist <span aria-hidden="true">&#x2197;</span></a>
+
+<script id="vs" type="x-shader/x-vertex">
+attribute vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }
+</script>
+
+<script id="fs" type="x-shader/x-fragment">
+/* One ray per pixel, traced backwards around a Schwarzschild black hole.
+   Units: the Schwarzschild radius is 1. The photon sphere is at r = 1.5 and
+   light with impact parameter under 3*sqrt(3)/2 falls in. The disk is a thin
+   sheet in the y = 0 plane; the stars are a hash of the escaping direction.
+   Colours are worked in linear light and only turned to screen values at the end. */
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform vec2  uRes;
+uniform vec3  uCam, uRight, uUp, uFwd;
+uniform float uTanHalf;   // half the field of view across the short side
+uniform float uTime;
+uniform float uPix;       // angular size of one rendered pixel, radians
+uniform float uDot;       // the same for one CSS pixel: how big a star should look
+uniform float uPulse;     // 0..1, the beat of the visitor's own music: a breath on the disk, else 0
+
+const float PI     = 3.14159265;
+const float R_IN   = 2.9;      // the disk, just inside the last stable orbit
+const float R_OUT  = 12.0;
+const float R_FAR  = 16.0;     // march inside this sphere; bend analytically outside
+const float B_CRIT = 2.598076; // 3*sqrt(3)/2: the edge of the shadow
+const int   STEPS  = 150;
+const float SWAP   = 90.0;     // seconds between fresh disk patterns (see disk())
+
+/* a hash without a lattice in it (after Dave Hoskins' hash12) */
+float h21(vec2 p){ vec3 q = fract(vec3(p.xyx)*0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y)*q.z); }
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p); f = f*f*(3.0 - 2.0*f);
+  return mix(mix(h21(i), h21(i + vec2(1,0)), f.x), mix(h21(i + vec2(0,1)), h21(i + vec2(1,1)), f.x), f.y);
+}
+/* the same, wrapping every N cells in x, so a pattern around a circle has no seam */
+float pnoise(vec2 p, float N){
+  vec2 i = floor(p), f = fract(p); f = f*f*(3.0 - 2.0*f);
+  float x0 = mod(i.x, N), x1 = mod(i.x + 1.0, N);
+  return mix(mix(h21(vec2(x0, i.y)), h21(vec2(x1, i.y)), f.x), mix(h21(vec2(x0, i.y + 1.0)), h21(vec2(x1, i.y + 1.0)), f.x), f.y);
+}
+/* erf, near enough: tanh(1.2x), written out since GLSL ES 1.0 has no tanh */
+float erfa(float x){ return 1.0 - 2.0/(exp(2.4055*clamp(x, -8.0, 8.0)) + 1.0); }
+
+/* fine streaks of gas: long around the disk, thin across it.
+   fine = 0 leaves out the finest, for images that lensing squeezes too thin to hold them */
+float streaks(float a, float lr, float seed, float fine){
+  return pnoise(vec2(a*6.0  + seed, lr*20.0 + seed), 6.0)*0.5
+       + mix(0.5, pnoise(vec2(a*12.0 + seed, lr*46.0),        12.0), fine)*0.32
+       + mix(0.5, pnoise(vec2(a*24.0,        lr*92.0 + seed), 24.0), fine*fine)*0.18;
+}
+
+/* hottest inner edge to cool outer rim: champagne white, gold, rose, soft mauve */
+vec3 palette(float u){
+  vec3 c = mix(vec3(1.0, .82, .80), vec3(1.0, .62, .40), smoothstep(0.0, 0.07, u));
+  c = mix(c, vec3(.96, .30, .48), smoothstep(0.05, 0.2, u));
+  c = mix(c, vec3(.66, .20, .44), smoothstep(0.30, 0.72, u));
+  return mix(c, vec3(.34, .10, .30), smoothstep(0.70, 1.0, u));
+}
+
+/* The disk where a ray crosses its plane: colour and cover.
+   s is how far the ray has come from the eye, to quiet the disk right underfoot;
+   fine is how much fine detail the image can hold. */
+vec4 disk(vec3 p, vec3 dir, float s, float fine){
+  float r = length(p.xz);
+  if (r < R_IN - 0.3 || r > R_OUT) return vec4(0.0);
+  float edge = smoothstep(R_IN - 0.3, R_IN + 0.3, r) * (1.0 - smoothstep(R_OUT - 5.0, R_OUT, r));
+  float phi = atan(p.z, p.x);
+  float lr = log(r);
+  // Keplerian turning: the inner edge laps the outer. Sheared noise winds ever
+  // tighter, so two patterns take turns, each fading out before it gets thin.
+  float w = 0.75/(r*sqrt(r));
+  float t1 = mod(uTime, SWAP), t2 = mod(uTime + 0.5*SWAP, SWAP);
+  float k = abs(2.0*t1/SWAP - 1.0);
+  float n = mix(streaks((phi - w*t1)/(2.0*PI), lr, 0.0, fine), streaks((phi - w*t2)/(2.0*PI), lr, 17.0, fine), k);
+  n = mix(0.5, smoothstep(0.18, 0.86, n), 0.25 + 0.75*fine);
+  float u = clamp((r - R_IN)/(R_OUT - R_IN), 0.0, 1.0);
+  // Doppler: gas coming towards us is brighter and hotter, gas going away dimmer and deeper
+  vec3 t = vec3(-p.z, 0.0, p.x)/r;
+  float beta = sqrt(0.5/max(r - 1.0, 0.6));
+  float dop = sqrt(1.0 - beta*beta)/(1.0 - beta*dot(t, -dir));
+  float boost = mix(1.0, dop*dop*dop, 0.45);
+  vec3 col = palette(clamp(u - 0.1*(dop - 1.0), 0.0, 1.0));
+  float bright = 2.4*pow(R_IN/r, 2.2) * (0.22 + 1.25*n) * boost * edge;
+  bright *= 1.0 + 0.1*uPulse;                 // the disk breathes a little with the music
+  // close underfoot the near disk would fill the view: dim it and let it thin
+  float near = smoothstep(0.8, 6.0, s);
+  bright *= mix(0.07, 1.0, near);
+  col = mix(vec3(.8, .3, .5), col, near);    // and keep what is left of it rose, not brown
+  float alpha = edge * (0.95 - 0.45*u) * (0.55 + 0.45*n) * mix(0.55, 1.0, near);
+  return vec4(col*bright, clamp(alpha, 0.0, 1.0));
+}
+
+/* One layer of stars: a grid on a cube face, a star in some of the cells.
+   A star is about a screen pixel across. When the picture is rendered coarser
+   than the screen, it may not be drawn smaller than a rendered pixel, so it
+   spreads wider and dimmer, keeping its light: no sparkle, and no snowballs. */
+vec3 starLayer(vec2 uv, float face, float N, float gain, float fill){
+  vec2 g = uv*N, ci = floor(g), cf = g - ci;
+  float cell = PI/(4.0*N);                   // radians across one cell
+  vec3 c = vec3(0.0);
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++){
+    vec2 o = vec2(float(i), float(j)), id = ci + o;
+    float h = h21(id + face*53.1 + N);
+    if (h > fill) continue;                  // an empty cell
+    vec2 sp = vec2(h21(id*1.7 + face + 3.0), h21(id*2.3 + face + 9.0));
+    float w = h/fill; w = w*w*w*w;           // most stars faint, a few bright
+    float ra0 = uDot*(0.6 + 0.9*w), ra = max(ra0, uPix*0.6);
+    // a star too near the face's edge would be cut in half by the next face: leave it out
+    vec2 su = (id + sp)/N;
+    if (max(abs(su.x), abs(su.y)) > 1.0 - 4.0*ra/(PI*0.25)) continue;
+    float ang = length(cf - o - sp)*cell;
+    float I = exp(-ang*ang/(ra*ra)) * (0.015 + 0.6*w) * gain * (ra0*ra0)/(ra*ra);
+    I *= 1.0 + 0.3*uPulse*(0.5 + 0.5*sin(uTime*1.3 + h*60.0));   // a slow twinkle, only while music plays
+    c += I*mix(vec3(.72, .78, 1.0), vec3(1.0, .82, .70), h21(id + face*7.7 + 1.0));
+  }
+  return c;
+}
+
+vec3 background(vec3 d){
+  vec3 a = abs(d); vec2 uv; float face;
+  if (a.x >= a.y && a.x >= a.z){ uv = d.yz/a.x; face = d.x > 0.0 ? 0.0 : 1.0; }
+  else if (a.y >= a.z)         { uv = d.xz/a.y; face = d.y > 0.0 ? 2.0 : 3.0; }
+  else                         { uv = d.xy/a.z; face = d.z > 0.0 ? 4.0 : 5.0; }
+  uv = atan(uv)*1.27324;                     // near-even steps of angle across the face
+  vec3 c = starLayer(uv, face, 9.0, 0.5, 0.42) + starLayer(uv, face, 22.0, 0.22, 0.3);
+  // the barest violet haze, a touch rosier along the plane of the disk
+  float n = vnoise(vec2(d.x*2.1 + d.z*0.7, d.y*2.0 + d.z*1.5) + 3.0);
+  c += vec3(.5, .3, .8)*0.0008*(0.4 + 0.6*n)*(1.0 + 0.8*exp(-d.y*d.y*8.0));
+  return c;
+}
+
+/* Linear light to screen. Dim and mid tones keep their hue (so rose stays rose);
+   only the brightest light burns through to white, as film does. */
+vec3 tone(vec3 c){
+  float L = dot(c, vec3(.2126, .7152, .0722));
+  vec3 hue = c*((1.0 - exp(-1.4*L))/max(L, 1e-5));
+  hue /= max(1.0, max(hue.r, max(hue.g, hue.b)));
+  vec3 burn = (1.0 - exp(-1.4*c))*vec3(1.0, .95, .94);   // white, with a blush in it
+  return mix(hue, burn, smoothstep(0.5, 2.6, L));
+}
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes)/(0.5*min(uRes.x, uRes.y))*uTanHalf;
+  vec3 d = normalize(uFwd + uv.x*uRight + uv.y*uUp);
+  vec3 p = uCam;
+  vec3 col = vec3(0.0), glow = vec3(0.0);
+  float T = 1.0;                             // how much of what lies behind still shows
+  float s = 0.0;                             // distance travelled from the eye
+  float b = length(cross(p, d));             // impact parameter, kept for the whole ray
+  float ingoing = -dot(p, d);
+  bool escaped = false;
+  vec3 dout = d;
+
+  if (b > R_FAR){
+    // passes far from the hole: bend it once by the weak-field angle and move on
+    float alpha = 2.0/b + 2.945/(b*b);
+    vec3 n = normalize(d*dot(p, d) - p);
+    dout = normalize(d*cos(alpha) + n*sin(alpha));
+    escaped = true;
+  } else {
+    float r0 = length(p);
+    if (r0 > R_FAR){                         // skip the empty space out to the far sphere
+      float pd = dot(p, d);
+      s = -pd - sqrt(max(pd*pd - (r0*r0 - R_FAR*R_FAR), 0.0));
+      p += d*s;
+    }
+    float h2 = b*b;
+    vec3 v = d;
+    vec3 acc = -1.5*h2*p/pow(dot(p, p), 2.5);
+    for (int i = 0; i < STEPS; i++){
+      float r = length(p);
+      float dt = clamp(0.13*(r - 1.0), 0.02, 0.9);  // small steps where space is steep, long ones where it is flat
+      vec3 pp = p;
+      p += v*dt + 0.5*acc*dt*dt;
+      vec3 acc2 = -1.5*h2*p/pow(dot(p, p), 2.5);
+      v += 0.5*(acc + acc2)*dt;
+      acc = acc2;
+      s += dt;
+      // a soft rose haze either side of the disk plane; it is what makes the disk glow.
+      // Its gaussian profile is integrated exactly across each step, so the steps never show as bands.
+      float rz = length(0.5*(pp.xz + p.xz));
+      float hh = 0.35 + 0.1*rz;
+      float y0 = pp.y/hh, y1 = p.y/hh, dy = y1 - y0;
+      float hz = abs(dy) > 1e-3 ? 0.8862*(erfa(y1) - erfa(y0))/dy : exp(-y0*y0);
+      hz *= smoothstep(R_IN - 1.0, R_IN + 1.2, rz)*(1.0 - smoothstep(R_OUT - 4.0, R_OUT + 1.0, rz));
+      glow += T*vec3(1.0, .42, .55)*hz*0.07*(1.0 + 0.12*uPulse)*dt/(rz*rz + 0.5)*smoothstep(0.5, 5.0, s);
+      // crossing the disk plane
+      if (pp.y*p.y < 0.0){
+        float f = pp.y/(pp.y - p.y);
+        vec3 hp = mix(pp, p, f);
+        vec4 dk = disk(hp, normalize(v), s - dt*(1.0 - f), smoothstep(0.04, 0.5, abs(b - B_CRIT)));
+        // the images of light that wound round many times crowd into the ring's own
+        // width, too fine for any pixel; the ring term below stands in for them
+        dk *= smoothstep(0.008, 0.045, abs(b - B_CRIT));
+        col += T*dk.rgb*dk.a;
+        T *= 1.0 - dk.a;
+      }
+      r = length(p);
+      if (r < 1.0) break;                              // fallen in
+      if (r > R_FAR && dot(p, v) > 0.0){ escaped = true; dout = normalize(v); break; }
+      if (T < 0.02) break;
+    }
+  }
+
+  // The haze only counts on rays that come back out or meet the disk:
+  // a ray that falls in with nothing in front of it stays perfectly black.
+  if (escaped || T < 0.97) col += glow;
+
+  // the photon ring: light that grazed the photon sphere. Crisp on the inside,
+  // a soft warm halo outside, never thinner than about a pixel.
+  if (ingoing > 0.0){
+    float db = b - B_CRIT;
+    float wpx = length(uCam)*uPix;           // one pixel, in impact parameter
+    float core = exp(-abs(db)/max(0.012, 0.9*wpx));
+    float halo = db > 0.0 ? exp(-db*7.0)*0.07 : 0.0;
+    col += T*T*(core*1.4*(1.0 + 0.05*uPulse)*vec3(1.0, .74, .62) + halo*vec3(1.0, .55, .62));
+  }
+  if (escaped) col += T*background(dout);
+
+  col = tone(col*1.05);
+  vec2 q = gl_FragCoord.xy/uRes - 0.5;
+  col *= 1.0 - 0.35*dot(q, q);               // a little vignette
+  col = pow(col, vec3(0.4545));
+  // a grain of dither against banding, but not on true black
+  if (col.r + col.g + col.b > 0.01) col += (h21(gl_FragCoord.xy + fract(uTime)) - 0.5)/255.0;
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<script>
+/* The page around the shader: a camera on a slow orbit, the pointer, wheel,
+   pinch and keyboard to move it, and four small labels that come forward as
+   the camera flies in. Nothing here is loaded from anywhere. */
+(() => {
+  const cv = document.getElementById('view');
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const coarse = matchMedia('(pointer:coarse)').matches;
+  const DEG = Math.PI/180;
+  const B_CRIT = 2.598076;
+  const PLAYLIST_URL = '';                   // set to the Spotify/YouTube playlist URL; the footer link shows only when this is set
+
+  /* ---- WebGL ---- */
+  let gl = null, prog = null, U = {}, lost = false;
+  function compile(type, src){
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  function setupGL(){
+    const opts = {antialias:false, alpha:false, depth:false, stencil:false, powerPreference:'high-performance'};
+    gl = cv.getContext('webgl', opts) || cv.getContext('experimental-webgl', opts);
+    if (!gl) return false;
+    prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, document.getElementById('vs').textContent));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, document.getElementById('fs').textContent));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    gl.useProgram(prog);
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'aPos');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    for (const n of ['uRes','uCam','uRight','uUp','uFwd','uTanHalf','uTime','uPix','uDot','uPulse']) U[n] = gl.getUniformLocation(prog, n);
+    return true;
+  }
+  try {
+    if (!setupGL()){ document.getElementById('nogl').classList.add('show'); return; }
+  } catch (e) {
+    document.getElementById('nogl').classList.add('show'); return;
+  }
+  cv.addEventListener('webglcontextlost', e => { e.preventDefault(); lost = true; });
+  cv.addEventListener('webglcontextrestored', () => { U = {}; if (setupGL()){ lost = false; sizeW = 0; fit(); wake(); } });
+
+  /* ---- camera: looks at the hole from (yaw, pitch, dist); every value eased toward a target ---- */
+  const START = innerHeight > innerWidth ? 26 : 28;
+  const cam = { yaw: 0.6, pitch: 8*DEG, dist: still ? START : START + 12 };   // arrive with a slow drift in
+  const tgt = { yaw: cam.yaw, pitch: cam.pitch, dist: START };
+  const vel = { yaw: 0, pitch: 0 };          // a little inertia after a drag
+  const PITCH_MAX = 80*DEG, DIST_MIN = 4.6, DIST_MAX = 42;
+  let pos = [0,0,0], right = [0,0,0], up = [0,0,0], fwd = [0,0,0], tanHalf = 0.55;
+
+  function basis(){
+    const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+    pos = [cam.dist*cp*Math.cos(cam.yaw), cam.dist*sp, cam.dist*cp*Math.sin(cam.yaw)];
+    const L = Math.hypot(pos[0], pos[1], pos[2]);
+    fwd = [-pos[0]/L, -pos[1]/L, -pos[2]/L];
+    const rl = Math.hypot(fwd[2], fwd[0]);
+    right = [-fwd[2]/rl, 0, fwd[0]/rl];
+    up = [right[1]*fwd[2] - right[2]*fwd[1], right[2]*fwd[0] - right[0]*fwd[2], right[0]*fwd[1] - right[1]*fwd[0]];
+    // the view opens as the hole fills it, so the closest view still holds the whole ring
+    // (a tall phone screen frames the far view a little tighter, so the hole isn't lost in it)
+    const k = Math.min(1, Math.max(0, (14 - cam.dist)/(14 - DIST_MIN)));
+    const far = 0.55*Math.min(1, Math.max(0.72, Math.sqrt(cssW/cssH)));
+    tanHalf = far + (0.92 - far)*k*k*(3 - 2*k);
+  }
+
+  /* ---- size, and a resolution that adapts to keep the frame rate ---- */
+  const dpr = Math.min(devicePixelRatio || 1, 3);
+  const SCALE_MAX = Math.min(dpr, 1.5);
+  const BUDGET = coarse ? 1.7e5 : 8e5;        // starting pixels to trace; adapt() takes it from there
+  let scale = still ? SCALE_MAX : Math.min(SCALE_MAX, Math.max(0.5, Math.sqrt(BUDGET/(innerWidth*innerHeight))));
+  let sizeW = 0, sizeH = 0, cssW = 1, cssH = 1, uiBoxes = null;
+  function fit(){
+    cssW = innerWidth; cssH = innerHeight;
+    const w = Math.max(1, Math.round(cssW*scale)), h = Math.max(1, Math.round(cssH*scale));
+    if (w !== sizeW || h !== sizeH){
+      sizeW = cv.width = w; sizeH = cv.height = h;
+      gl.viewport(0, 0, w, h);
+    }
+    const sv = document.getElementById('leads');
+    sv.setAttribute('width', cssW); sv.setAttribute('height', cssH);
+    sv.setAttribute('viewBox', `0 0 ${cssW} ${cssH}`);
+    uiBoxes = null;                           // measured again on the next frame
+  }
+  // slow frames shrink the picture quickly; fast ones grow it back only after a calm spell
+  let ema = 0, frames = 0, lastAdjust = 0, goodRuns = 0;
+  function adapt(dtMs, now){
+    if (still) return;
+    frames++;
+    ema = ema ? ema*0.9 + dtMs*0.1 : dtMs;
+    if (frames < 20 || now - lastAdjust < 1000) return;
+    let s = scale;
+    if (ema > 23){ s = scale*0.84; goodRuns = 0; }
+    else if (ema < 15.5){ if (++goodRuns >= 3){ s = scale*1.08; goodRuns = 0; } }
+    else goodRuns = 0;
+    lastAdjust = now;
+    s = Math.min(SCALE_MAX, Math.max(0.5, s));     // never coarser than half a CSS pixel
+    if (Math.abs(s - scale) > 0.02){ scale = s; fit(); }
+  }
+
+  /* ---- labels: where the layers fall on screen ---- */
+  const labs = ['disk','ring','horizon','centre'].map(n => ({
+    el: document.getElementById('lab-' + n), g: document.getElementById('ld-' + n),
+    pick: -1, x: 0, y: 0, placed: false
+  }));
+  labs.forEach(l => { l.line = l.g.querySelector('line'); l.dot = l.g.querySelector('circle'); });
+  const liveEl = document.getElementById('live');
+  const REVEAL = [22, 14, 9, 6.4];           // distances at which each layer is named
+  let stage = 0;
+  function project(P){                        // world point to CSS pixels, or null if behind
+    const v = [P[0]-pos[0], P[1]-pos[1], P[2]-pos[2]];
+    const z = v[0]*fwd[0] + v[1]*fwd[1] + v[2]*fwd[2];
+    if (z <= 0.1) return null;
+    const x = v[0]*right[0] + v[1]*right[1] + v[2]*right[2];
+    const y = v[0]*up[0] + v[1]*up[1] + v[2]*up[2];
+    const s = Math.min(cssW, cssH)/2/tanHalf/z;
+    return [cssW/2 + x*s, cssH/2 - y*s];
+  }
+  // A candidate is an anchor on the feature and a direction out to the words.
+  // Each label takes the first candidate whose box fits on screen, keeps clear of
+  // the shadow, the page's own links and buttons and the other labels, and holds it while it still fits.
+  function boxFor(c, w, h){
+    const L = c.len || 30;
+    const px = c.ax + c.dx*L, py = c.ay + c.dy*L;
+    let x = c.dx > 0.3 ? px : c.dx < -0.3 ? px - w : px - w/2;
+    let y = c.dy > 0.3 ? py : c.dy < -0.3 ? py - h : py - h/2;
+    if (Math.abs(c.dx) <= 0.3) x = Math.min(Math.max(x, 16), cssW - 16 - w);   // centred ones may slide sideways
+    return {x, y, w, h};
+  }
+  function hits(a, b, pad){ return a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.y < b.y + b.h + pad && b.y < a.y + a.h + pad; }
+  function hitsCircle(a, cx, cy, R){
+    const nx = Math.min(Math.max(cx, a.x), a.x + a.w), ny = Math.min(Math.max(cy, a.y), a.y + a.h);
+    return Math.hypot(nx - cx, ny - cy) < R;
+  }
+  // a box wholly inside the shadow's upper part is welcome: black is the best page to read on
+  function inside(b, cx, cy, R){
+    const fx = Math.max(Math.abs(b.x - cx), Math.abs(b.x + b.w - cx)), fy = Math.max(Math.abs(b.y - cy), Math.abs(b.y + b.h - cy));
+    return b.y + b.h < cy - R*0.12 && Math.hypot(fx, fy) < R*0.9;
+  }
+  function fits(b, taken, shadow, extra){
+    const m = 12 + extra;
+    if (b.x < m || b.y < m || b.x + b.w > cssW - m || b.y + b.h > cssH - m) return false;
+    if (uiBoxes) for (const u of uiBoxes) if (hits(b, u, 6 + extra)) return false;
+    if (shadow && hitsCircle(b, shadow[0], shadow[1], shadow[2]) && !inside(b, shadow[0], shadow[1], shadow[2])) return false;
+    for (const t of taken) if (hits(b, t, 10 + extra)) return false;
+    return true;
+  }
+  function choose(l, cands, taken, shadow){
+    const w = l.el.offsetWidth, h = l.el.offsetHeight;
+    // the first that fits wins, but a label only leaves a spot that still fits
+    // for one earlier in the list when it fits with room to spare: no flicker at the edges
+    const keep = l.pick >= 0 && l.pick < cands.length && fits(boxFor(cands[l.pick], w, h), taken, shadow, 0);
+    for (let i = 0; i < cands.length; i++){
+      if (keep && i === l.pick) break;
+      const b = boxFor(cands[i], w, h);
+      if (fits(b, taken, shadow, keep ? 10 : 0)){ l.pick = i; return {c: cands[i], b}; }
+    }
+    if (keep) return {c: cands[l.pick], b: boxFor(cands[l.pick], w, h)};
+    l.pick = -1;
+    return null;
+  }
+  function draw(l, res, show, dim, dt){
+    const on = show && !!res;
+    l.el.classList.toggle('on', on); l.el.classList.toggle('dim', dim);
+    l.g.classList.toggle('on', on); l.g.classList.toggle('dim', on && dim);
+    if (!on){ l.placed = false; return; }
+    const {c, b} = res;
+    // glide to a new spot rather than jump; arrive at once the first time
+    const f = l.placed && !still ? 1 - Math.exp(-dt*7) : 1;
+    l.x += (b.x - l.x)*f; l.y += (b.y - l.y)*f; l.placed = true;
+    l.el.classList.toggle('ra', c.dx < -0.3); l.el.classList.toggle('ca', Math.abs(c.dx) <= 0.3);
+    l.el.style.transform = `translate(${l.x.toFixed(1)}px,${l.y.toFixed(1)}px)`;
+    // the hairline runs from the dot to just short of the words
+    const bx = Math.min(Math.max(c.ax, l.x), l.x + b.w), by = Math.min(Math.max(c.ay, l.y), l.y + b.h);
+    const len = Math.hypot(bx - c.ax, by - c.ay), k = len > 8 ? (len - 5)/len : 0;
+    l.dot.setAttribute('cx', c.ax.toFixed(1)); l.dot.setAttribute('cy', c.ay.toFixed(1));
+    l.line.setAttribute('x1', c.ax.toFixed(1)); l.line.setAttribute('y1', c.ay.toFixed(1));
+    l.line.setAttribute('x2', (c.ax + (bx - c.ax)*k).toFixed(1)); l.line.setAttribute('y2', (c.ay + (by - c.ay)*k).toFixed(1));
+  }
+  function layers(dt){
+    // the corners the page itself uses: the way back, the sound buttons, the music card, the footer link
+    if (!uiBoxes) uiBoxes = ['df-back', 'ctl', 'music', 'playlist'].map(id => document.getElementById(id))
+      .filter(el => el && getComputedStyle(el).visibility !== 'hidden').map(el => el.getBoundingClientRect()).filter(r => r.width > 0);
+    const d = cam.dist;
+    // one step at a time, with a little slack so a label never flickers at its edge
+    let s = 0;
+    for (let i = 0; i < 4; i++) if (d < REVEAL[i] + (stage > i ? 0.8 : 0)) s = i + 1;
+    if (s > stage) liveEl.textContent = labs[s-1].el.textContent;
+    stage = s;
+    // the shadow's apparent size: sin a = b_c / d * sqrt(1 - 1/d)
+    const sa = Math.min(0.999, B_CRIT/d*Math.sqrt(1 - 1/d));
+    const R = Math.tan(Math.asin(sa))/tanHalf*Math.min(cssW, cssH)/2;
+    const cx = cssW/2, cy = cssH/2;
+    const onRing = (deg, f, dirs) => dirs.map(([dx, dy, len]) => ({ax: cx + R*f*Math.cos(deg*DEG), ay: cy - R*f*Math.sin(deg*DEG), dx, dy, len}));
+    const cands = [];
+    // the disk: a point on its right-hand side, a little way out
+    cands[0] = [];
+    const rr = Math.hypot(right[0], right[2]);
+    for (const rad of [7.5, 6, 9.5, 5]){
+      const P = project([right[0]/rr*rad, 0, right[2]/rr*rad]);
+      if (P && P[0] < cssW - 30) for (const [dx, dy] of [[.7,.7],[0,1],[-.7,.7],[.7,-.7]]) cands[0].push({ax:P[0], ay:P[1], dx, dy, len:34});
+    }
+    // ring and horizon: inside the black of the shadow when it is big enough to
+    // hold the words, else above the lensed arch, and only then anywhere that fits
+    const over = R*0.95 + 30;
+    cands[1] = [...onRing(42, 0.99, [[-.75,.66,22]]), ...onRing(28, 0.99, [[-1,0,22]]), ...onRing(62, 1.0, [[0,-1,over]]),
+                ...onRing(48, 1.04, [[.7,-.7,30],[1,0,30]]), ...onRing(28, 1.04, [[1,-.3,30],[.7,.7,30]])];
+    cands[2] = [...onRing(138, 0.99, [[.75,.66,22]]), ...onRing(152, 0.99, [[1,0,22]]), ...onRing(118, 1.0, [[0,-1,over]]),
+                ...onRing(140, 1.04, [[-.7,-.7,40],[-1,0,46]]), ...onRing(160, 1.04, [[-1,0,40]])];
+    cands[3] = [{ax:cx, ay:cy, dx:0, dy:-1, len:16}];
+    // the newest label is placed first; older ones keep only their names, if there is room
+    const taken = [], shadow = [cx, cy, R*1.04], order = [];
+    for (let i = stage - 1; i >= 0; i--) order.push(i);
+    for (let i = stage; i < 4; i++) order.push(i);
+    for (const i of order){
+      const l = labs[i], show = stage > i, dim = stage > i + 1;
+      l.el.classList.toggle('dim', dim);
+      const res = show ? choose(l, cands[i], taken, i === 3 ? null : shadow) : null;
+      if (res) taken.push(res.b);
+      draw(l, res, show, dim, dt);
+    }
+  }
+
+  /* ---- input ---- */
+  const title = document.getElementById('title');
+  const hint = document.getElementById('hint');
+  if (coarse) hint.innerHTML = 'Drag to orbit <span aria-hidden="true">&middot;</span> pinch to fly closer';
+  requestAnimationFrame(() => { cv.classList.add('ready'); title.classList.add('on'); });
+  let touched = false;
+  function firstTouch(){ if (!touched){ touched = true; title.classList.remove('on'); title.classList.add('off'); document.body.classList.add('touched'); uiBoxes = null; } }
+
+  const ptrs = new Map();
+  let dragging = false, pinchD = 0, lastMove = 0;
+  const ROT = 0.004;                         // radians per pixel of drag
+  function clampTgt(){
+    tgt.pitch = Math.min(PITCH_MAX, Math.max(-PITCH_MAX, tgt.pitch));
+    tgt.dist = Math.min(DIST_MAX, Math.max(DIST_MIN, tgt.dist));
+  }
+  cv.addEventListener('pointerdown', e => {
+    try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+    resumeSound();                           // iOS can leave the sound interrupted; a touch brings it back
+    ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    dragging = true; vel.yaw = vel.pitch = 0;
+    if (ptrs.size === 2){ const [a, b] = [...ptrs.values()]; pinchD = Math.hypot(a[0]-b[0], a[1]-b[1]); }
+    firstTouch(); wake();
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!ptrs.has(e.pointerId)) return;
+    const prev = ptrs.get(e.pointerId);
+    ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    const now = performance.now(), dtm = Math.max(8, now - lastMove); lastMove = now;
+    if (ptrs.size === 1){
+      const dx = e.clientX - prev[0], dy = e.clientY - prev[1];
+      tgt.yaw += dx*ROT; tgt.pitch += dy*ROT;
+      vel.yaw = dx*ROT/dtm*1000; vel.pitch = dy*ROT/dtm*1000;
+    } else if (ptrs.size === 2){
+      const [a, b] = [...ptrs.values()];
+      const d = Math.hypot(a[0]-b[0], a[1]-b[1]);
+      if (pinchD > 0 && d > 0) tgt.dist *= pinchD/d;
+      pinchD = d;
+    }
+    clampTgt(); wake();
+  });
+  const release = e => {
+    ptrs.delete(e.pointerId); pinchD = 0;
+    if (!ptrs.size){ dragging = false; if (performance.now() - lastMove > 80) vel.yaw = vel.pitch = 0; }
+    wake();
+  };
+  cv.addEventListener('pointerup', release);
+  cv.addEventListener('pointercancel', release);
+  cv.addEventListener('wheel', e => {
+    e.preventDefault();
+    const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 120 : 1;
+    tgt.dist *= Math.exp(Math.max(-200, Math.min(200, e.deltaY*k))*0.0012);
+    clampTgt(); firstTouch(); wake();
+  }, {passive:false});
+  addEventListener('keydown', e => {
+    if (e.target && e.target !== cv && e.target !== document.body) return;
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    const k = e.key;
+    if (k === 'ArrowLeft') tgt.yaw -= 0.1;
+    else if (k === 'ArrowRight') tgt.yaw += 0.1;
+    else if (k === 'ArrowUp') tgt.pitch += 0.07;
+    else if (k === 'ArrowDown') tgt.pitch -= 0.07;
+    else if (k === '+' || k === '=' || k === 'PageUp') tgt.dist *= 0.86;
+    else if (k === '-' || k === '_' || k === 'PageDown') tgt.dist *= 1.16;
+    else return;
+    e.preventDefault(); clampTgt(); firstTouch(); wake();
+  });
+  addEventListener('resize', () => { fit(); wake(); });
+
+  /* ---- sound ----
+     Everything heard is made here, from oscillators and generated noise; nothing is
+     loaded. A song the visitor picks from their device plays through the same graph,
+     in their browser only: it is never uploaded or kept.
+     The states: soundOn is the master, the speaker button. The drone plays when sound
+     is on, no song is playing and the page is in view. A song plays when one is loaded,
+     sound is on and the visitor has not paused it; as it starts the drone fades out, and
+     when it ends, is stopped or paused the drone fades back. Turning sound off quiets
+     everything: the drone fades and a playing song pauses where it is, to go on when
+     sound returns. Picking a song turns sound on, since picking it is asking to hear it.
+     The context rests when nothing is left to hear; a song goes on in a hidden tab,
+     like any music does. */
+  const AMB_LEVEL = 0.36;
+  const ASK = 'Choose a song from your device';
+  const snd = document.getElementById('snd'), mus = document.getElementById('mus');
+  const fileIn = document.getElementById('file'), audio = document.getElementById('song');
+  const pop = document.getElementById('music'), nameEl = document.getElementById('mu-name');
+  const pauseBtn = document.getElementById('mu-pause'), pickBtn = document.getElementById('mu-pick'), stopBtn = document.getElementById('mu-stop');
+  let ac = null, master = null, ambGain = null, amb = null, musicGain = null, analyser = null, fdata = null;
+  let soundOn = false, ambOn = false, loaded = false, userPaused = false, songName = '', songURL = null, unlocked = false;
+  let suspendT = 0, pauseT = 0, dropT = 0, popT = 0;
+
+  const songOn = () => loaded && soundOn && !userPaused;     // the song should be heard
+  const busy = () => ambOn || (loaded && !audio.paused);       // something is, or is fading, to be heard
+
+  function ensureAC(){
+    if (ac) return ac;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { ac = new AC(); } catch (_) { return null; }
+    master = ac.createGain(); master.connect(ac.destination);
+    // iOS 'interrupts' the context for a call or a trip away from the page: come back after
+    ac.onstatechange = () => { if (ac.state !== 'running' && ac.state !== 'closed' && busy()) ac.resume().catch(() => {}); };
+    return ac;
+  }
+  // iOS mutes Web Audio with the ringer switch unless told this is playback (Safari 16.4+)
+  function session(type){ try { const s = navigator.audioSession; if (s && s.type !== type) s.type = type; } catch (_) {} }
+  // inside a tap: a running context to play into, and nothing about to put it to rest
+  function prime(){
+    if (!ensureAC()) return false;
+    clearTimeout(suspendT);
+    session('playback');
+    if (ac.state !== 'running') ac.resume().catch(() => {});
+    return true;
+  }
+  function resumeSound(){ if (ac && ac.state !== 'running' && ac.state !== 'closed' && busy()) ac.resume().catch(() => {}); }
+  // rest the context once the fades are done and nothing is left to hear
+  function rest(){
+    clearTimeout(suspendT);
+    suspendT = setTimeout(() => {
+      if (!ac || busy()) return;
+      if (ac.state === 'running') ac.suspend().catch(() => {});
+      session('auto');
+    }, 1800);
+  }
+  // a gain from wherever it is now: in on a soft curve, out on a straight line to true silence
+  function fade(p, v, s){
+    const t = ac.currentTime;
+    if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t);
+    else { p.cancelScheduledValues(t); p.setValueAtTime(p.value, t); }
+    if (v > 0) p.setTargetAtTime(v, t, s/4); else p.linearRampToValueAtTime(0, t + s);
+  }
+
+  // the drone, on A: a soft 55 Hz root for headphones, with the tone carried an octave and two
+  // above (110, 220, then E and A) so a phone's small speaker still has something to play.
+  // Unequal detuned pairs beat slowly without ever cancelling; a lowpass keeps it round; a
+  // breath of filtered noise for wind; a faint high shimmer that comes forward as you fly in
+  function buildAmbient(){
+    if (amb) return;
+    const t = ac.currentTime + 0.02;
+    ambGain = ac.createGain(); ambGain.gain.value = 0; ambGain.connect(master);
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.Q.value = 0.5; lp.connect(ambGain);
+    const osc = (type, f, det, g, to) => {
+      const o = ac.createOscillator(), gn = ac.createGain();
+      o.type = type; o.frequency.value = f; o.detune.value = det; gn.gain.value = g;
+      o.connect(gn); gn.connect(to); o.start(t); return gn;
+    };
+    const lfo = (f, depth, param) => { const o = ac.createOscillator(), gn = ac.createGain(); o.frequency.value = f; gn.gain.value = depth; o.connect(gn); gn.connect(param); o.start(t); };
+    osc('sine', 55, 0, .09, lp);
+    osc('sine', 110, -2, .12, lp); osc('sine', 110, 2, .07, lp);
+    osc('triangle', 220, -1.5, .08, lp); osc('triangle', 220, 1.5, .05, lp);
+    const fifth = osc('sine', 329.63, 1, .05, lp);
+    const high = osc('sine', 440, -1, .03, lp);
+    lfo(0.045, .03, fifth.gain); lfo(0.031, .02, high.gain); lfo(0.023, 140, lp.frequency);
+    // wind: a few seconds of noise, looped, through a wandering bandpass
+    const nb = ac.createBuffer(1, Math.round(ac.sampleRate*3.7), ac.sampleRate), ch = nb.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = Math.random()*2 - 1;
+    const noise = ac.createBufferSource(); noise.buffer = nb; noise.loop = true;
+    const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 500; bp.Q.value = 0.7;
+    const wind = ac.createGain(); wind.gain.value = .01;
+    noise.connect(bp); bp.connect(wind); wind.connect(ambGain); noise.start(t);
+    lfo(0.07, 150, bp.frequency);
+    // shimmer: E and A an octave up, barely there, with a slow waver
+    const sh = ac.createGain(); sh.gain.value = 0; sh.connect(ambGain);
+    const s1 = osc('sine', 659.25, 0, .5, sh), s2 = osc('sine', 880, 3, .35, sh);
+    lfo(0.11, .25, s1.gain); lfo(0.083, .18, s2.gain);
+    amb = {lp, wind, sh, near: -1};
+  }
+  // how close the camera is, 0 far to 1 at the nearest: the shimmer and a little wind come forward
+  function ambientNear(k){
+    if (!amb || Math.abs(k - amb.near) < 0.003) return;
+    amb.near = k;
+    const t = ac.currentTime;
+    amb.lp.frequency.setTargetAtTime(900 + 500*k, t, .4);
+    amb.sh.gain.setTargetAtTime(0.028*k*k, t, .4);
+    amb.wind.gain.setTargetAtTime(0.01 + 0.01*k, t, .4);
+  }
+  function ambientTo(on){
+    if (on === ambOn) return;
+    ambOn = on;
+    if (on){ buildAmbient(); fade(ambGain.gain, AMB_LEVEL, 2.5); }
+    else if (amb) fade(ambGain.gain, 0, 1.5);
+  }
+
+  // the visitor's song, through an analyser for the beat. A media element can be wired
+  // to one context only once; if that fails it simply plays as itself
+  function wireSong(){
+    if (musicGain || !ac) return;
+    try {
+      const src = ac.createMediaElementSource(audio);
+      analyser = ac.createAnalyser(); analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0;     // smoothed in beat(), in seconds, not per frame
+      analyser.minDecibels = -85; analyser.maxDecibels = -15;
+      musicGain = ac.createGain();
+      src.connect(analyser); analyser.connect(musicGain); musicGain.connect(master);
+      fdata = new Uint8Array(analyser.frequencyBinCount);
+    } catch (_) { analyser = musicGain = null; }
+  }
+  function setURL(u){ if (songURL) URL.revokeObjectURL(songURL); songURL = u; }
+  // iOS lets a media element play on its own only after it has once played inside a tap:
+  // a few silent samples, played as the picker opens, so the chosen song can start by itself
+  function unlock(){
+    if (unlocked) return;
+    unlocked = true;
+    const n = 64, b = new DataView(new ArrayBuffer(44 + n*2));
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) b.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, 'RIFF'); b.setUint32(4, 36 + n*2, true); str(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
+    b.setUint32(24, 8000, true); b.setUint32(28, 16000, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); str(36, 'data'); b.setUint32(40, n*2, true);
+    setURL(URL.createObjectURL(new Blob([b], {type:'audio/wav'})));
+    audio.src = songURL; audio.play().catch(() => {});
+  }
+  function loadSong(f){
+    if (f.type && !/^(audio|video)\//.test(f.type)){ card('msg', 'That isn’t a sound file.'); return; }
+    wireSong();
+    clearTimeout(pauseT); pauseT = 0;
+    audio.pause();
+    setURL(URL.createObjectURL(f));
+    audio.src = songURL;
+    songName = f.name.replace(/\.[^.]+$/, '') || f.name;
+    loaded = true; userPaused = false; soundOn = true;
+    card('song'); apply();
+  }
+  function stopSong(){
+    if (!loaded) return;
+    loaded = false; userPaused = false; songName = '';
+    card(null); apply();
+    // a quick fade rather than a cut, then let the file go
+    const drop = () => { if (loaded) return; audio.pause(); audio.removeAttribute('src'); audio.load(); setURL(null); };
+    clearTimeout(dropT);
+    if (musicGain && !audio.paused){ fade(musicGain.gain, 0, .25); dropT = setTimeout(drop, 280); } else drop();
+  }
+  // one place that makes the sound match the states above
+  function apply(){
+    const want = songOn();
+    clearTimeout(pauseT); pauseT = 0;
+    if (loaded){
+      if (want){
+        if (musicGain) fade(musicGain.gain, 1, .4);
+        // not allowed to start by itself: offer the Play button instead
+        if (audio.paused) audio.play().catch(e => { if (e && e.name === 'NotAllowedError' && songOn()){ userPaused = true; apply(); } });
+      } else if (!audio.paused){
+        if (!musicGain) audio.pause();
+        else { fade(musicGain.gain, 0, .3); pauseT = setTimeout(() => { pauseT = 0; if (!songOn()) audio.pause(); }, 320); }
+      }
+    }
+    ambientTo(!!ac && soundOn && !want && !document.hidden);
+    if (ambOn || want) resumeSound(); else rest();
+    snd.setAttribute('aria-pressed', String(soundOn));
+    mus.classList.toggle('live', loaded);
+    pauseBtn.textContent = want ? 'Pause' : 'Play';
+  }
+  // the card: 'song' (its name and buttons), 'msg' (a line of words, then back), or closed
+  function card(mode, text){
+    clearTimeout(popT);
+    pop.classList.toggle('on', !!mode); pop.classList.toggle('msg', mode === 'msg'); pop.classList.remove('rest');
+    nameEl.textContent = mode === 'msg' ? text : songName;
+    nameEl.title = mode === 'song' ? songName : '';
+    mus.setAttribute('aria-expanded', String(!!mode));
+    if (mode === 'song') popT = setTimeout(() => pop.classList.add('rest'), 7000);
+    if (mode === 'msg') popT = setTimeout(() => { card(loaded ? 'song' : null); apply(); }, text === ASK ? 9000 : 4000);
+    uiBoxes = null;
+  }
+  const wakeCard = () => { if (pop.classList.contains('on') && !pop.classList.contains('msg')) card('song'); };
+  pop.addEventListener('pointerenter', wakeCard);
+  pop.addEventListener('focusin', wakeCard);
+
+  snd.addEventListener('click', () => {
+    if (!soundOn && !prime() && !loaded) return;   // no Web Audio: only a song can sound
+    soundOn = !soundOn; apply();
+  });
+  mus.addEventListener('click', () => {
+    if (loaded){ card(pop.classList.contains('on') ? null : 'song'); return; }
+    prime(); unlock();
+    fileIn.click();                            // straight from the tap, as iOS Safari requires
+    card('msg', ASK);
+  });
+  pickBtn.addEventListener('click', () => { prime(); fileIn.click(); });
+  fileIn.addEventListener('change', () => {
+    const f = fileIn.files && fileIn.files[0];
+    fileIn.value = '';                         // so the same file can be chosen again
+    if (f) loadSong(f);
+  });
+  fileIn.addEventListener('cancel', () => { if (!loaded){ card(null); apply(); } });   // where browsers tell us
+  pauseBtn.addEventListener('click', () => {
+    if (!loaded) return;
+    if (songOn()) userPaused = true; else { prime(); userPaused = false; soundOn = true; }
+    apply();
+  });
+  stopBtn.addEventListener('click', stopSong);
+  audio.addEventListener('ended', stopSong);
+  audio.addEventListener('error', () => { if (loaded){ stopSong(); card('msg', 'That file wouldn’t play here.'); } });
+  // paused or played from outside the page (lock screen, headphones pulled out): follow along
+  audio.addEventListener('pause', () => { if (loaded && audio.paused && !audio.ended && songOn()){ userPaused = true; apply(); } });
+  audio.addEventListener('play', () => { if (loaded && !audio.paused && !songOn() && !pauseT){ userPaused = false; soundOn = true; apply(); } });
+  if (PLAYLIST_URL){ const pl = document.getElementById('playlist'); pl.href = PLAYLIST_URL; pl.hidden = false; }
+
+  // the beat: how loud the bass is against its own slow average, so a kick lifts the
+  // picture and a steady hum doesn't, with a soft ceiling so loud music never pins it.
+  // It rises over a fifth of a second and settles over about a second: a breath, never a
+  // flicker. Every rate is per second, so any frame rate gives the same motion
+  let env = 0, avg = -1, pulse = 0;
+  function beat(dt){
+    let to = 0;
+    if (analyser && loaded && !audio.paused && ac.state === 'running'){
+      analyser.getByteFrequencyData(fdata);
+      const bw = ac.sampleRate/analyser.fftSize;
+      const i0 = Math.max(1, Math.round(40/bw)), i1 = Math.max(i0, Math.round(160/bw));
+      let e = 0;
+      for (let i = i0; i <= i1; i++) e += fdata[i];
+      e /= 255*(i1 - i0 + 1);
+      if (avg < 0 && e > 0.05) env = avg = e;    // start level with the song, once it is heard
+      if (avg >= 0){
+        env = ease(env, e, dt, e > env ? 30 : 8);
+        avg = ease(avg, env, dt, 0.8);
+        const d = Math.max(0, env - avg - 0.02);
+        to = d/(d + 0.06);
+      }
+    } else { env = 0; avg = -1; }
+    pulse = ease(pulse, to, dt, to > pulse ? 6 : 1.6);
+    if (pulse < 1e-3) pulse = 0;
+  }
+
+  /* ---- the loop ---- */
+  let raf = 0, lastT = 0, t0 = performance.now(), time = 0;
+  function wake(){ if (!raf && !document.hidden) raf = requestAnimationFrame(frame); }
+  function ease(cur, to, dt, rate){ return cur + (to - cur)*(1 - Math.exp(-dt*rate)); }
+
+  function frame(now){
+    raf = 0;
+    if (lost) return;
+    const raw = lastT ? (now - lastT)/1000 : 0.016;
+    const dt = Math.min(0.05, raw);
+    if (lastT) adapt(now - lastT, now);
+    lastT = now;
+
+    if (still){
+      cam.yaw = tgt.yaw; cam.pitch = tgt.pitch; cam.dist = tgt.dist;
+    } else {
+      time = (now - t0)/1000;
+      if (!dragging){
+        tgt.yaw += 0.008*dt;                  // the idle drift: about one turn in thirteen minutes
+        if (Math.abs(vel.yaw) + Math.abs(vel.pitch) > 1e-4){
+          tgt.yaw += vel.yaw*dt; tgt.pitch += vel.pitch*dt; clampTgt();
+          const f = Math.exp(-dt*3); vel.yaw *= f; vel.pitch *= f;
+        }
+      }
+      cam.yaw = ease(cam.yaw, tgt.yaw, dt, 5);
+      cam.pitch = ease(cam.pitch, tgt.pitch, dt, 5);
+      cam.dist = ease(cam.dist, tgt.dist, dt, touched ? 2.6 : 0.45);   // the first drift in is slowest
+    }
+    basis();
+    if (ambOn) ambientNear(Math.min(1, Math.max(0, (START - cam.dist)/(START - DIST_MIN))));
+    if (!still) beat(Math.min(0.25, raw));      // with motion unwanted the picture never moves to the music
+
+    gl.uniform2f(U.uRes, sizeW, sizeH);
+    gl.uniform3f(U.uCam, pos[0], pos[1], pos[2]);
+    gl.uniform3f(U.uRight, right[0], right[1], right[2]);
+    gl.uniform3f(U.uUp, up[0], up[1], up[2]);
+    gl.uniform3f(U.uFwd, fwd[0], fwd[1], fwd[2]);
+    gl.uniform1f(U.uTanHalf, tanHalf);
+    gl.uniform1f(U.uTime, time);
+    gl.uniform1f(U.uPix, 2*tanHalf/Math.min(sizeW, sizeH));
+    gl.uniform1f(U.uDot, 2*tanHalf/Math.min(cssW, cssH));
+    gl.uniform1f(U.uPulse, pulse);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    layers(dt);
+
+    // keep going unless motion is unwanted; then only draw when something changed
+    if (!still || dragging) raf = requestAnimationFrame(frame);
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden){
+      if (raf) cancelAnimationFrame(raf); raf = 0; lastT = 0;
+    } else wake();
+    if (ac) apply();                           // the drone rests while hidden; a playing song goes on
+  });
+
+  fit(); basis(); wake();
+})();
+</script>
+
+<!-- Deep Field: the way back to the hub -->
+<a id="df-back" href="../" aria-label="Back to Deep Field">&lsaquo; Deep Field</a>
+<style>
+  #df-back{position:fixed;z-index:6;top:calc(2px + env(safe-area-inset-top,0px));left:calc(8px + env(safe-area-inset-left,0px));
+    padding:16px 12px;font:12px/1 Georgia,"Times New Roman",serif;letter-spacing:.08em;
+    color:rgba(222,218,242,.54);text-decoration:none;text-shadow:0 0 10px rgba(0,0,0,.9);
+    -webkit-tap-highlight-color:transparent;transition:color .3s ease,opacity .4s ease}
+  #df-back:hover,#df-back:focus-visible{color:rgba(240,236,255,.92)}
+  #df-back:focus-visible{outline:2px solid rgba(220,215,255,.8);outline-offset:-6px;border-radius:10px}
+</style>
+</body>
+</html>

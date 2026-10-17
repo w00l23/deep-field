@@ -15,6 +15,7 @@ with Claude as pair programmer.
 | [Solar System](https://w00l23.github.io/deep-field/solar-system/) | The Sun, its planets and their moons, where they really are today. One HTML file, raw WebGL. | [`solar-system/`](solar-system/) |
 | [The original sketch](https://w00l23.github.io/deep-field/solar-system/original/) | The first version of it: eight planets on circles, canvas 2D. | [`solar-system/original/`](solar-system/original/) |
 | [Wormhole](https://w00l23.github.io/deep-field/wormhole/) | A small ship leaves Earth, tears space open and comes out at Saturn. three.js from a CDN. | [`wormhole/`](wormhole/) |
+| [Rose Black Hole](https://w00l23.github.io/deep-field/black-hole/) | A black hole in deep space, wrapped in a rose and gold disk whose light bends over and under it. One HTML file, raw WebGL shader. | [`black-hole/`](black-hole/) |
 | Scale Zoom | From the width of an atom to the edge of the observable universe. Coming soon. | [`scale-zoom/`](scale-zoom/) |
 
 ## Run it locally
@@ -37,7 +38,8 @@ path on GitHub Pages (`/deep-field/`), and falls back to `/` on localhost.
   ([solar-system](https://github.com/w00l23/solar-system),
   [wormhole](https://github.com/w00l23/wormhole)). The only additions are a
   page title, a description and share tags in its `<head>`, and a small
-  "‹ Deep Field" link in the top-left corner back to the hub.
+  "‹ Deep Field" link in the top-left corner back to the hub. The black hole
+  was made here, in this repo.
 - `assets/` holds the card previews, the share images and the icons;
   `404.html` is what GitHub Pages shows for any missing path.
 
@@ -62,9 +64,14 @@ measurements and pictures:
   Elements, and J. Meeus, *Astronomical Algorithms*, for how each body is
   turned and how bright it looks.
 - **three.js** (MIT licence) renders the wormhole.
+- The **black hole** carries no maps or data at all; its own shader paints
+  it. Its rose, pink and gold colours are an artistic choice: a real
+  accretion disk glows white-orange. Its sound is generated in the page; a
+  song you play there stays in your browser and is never uploaded.
 
 Each sim's folder has the full table in its `CREDITS.md`
-([solar system](solar-system/CREDITS.md), [wormhole](wormhole/CREDITS.md)),
+([solar system](solar-system/CREDITS.md), [wormhole](wormhole/CREDITS.md),
+[black hole](black-hole/CREDITS.md)),
 including how each map was reduced or changed. The pictures are public
 domain (NASA, USGS); Gaia and SIMBAD ask to be named.
 
