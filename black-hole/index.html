@@ -323,7 +323,7 @@ vec3 tone(vec3 c){
   vec3 hue = c*((1.0 - exp(-1.4*L))/max(L, 1e-5));
   hue /= max(1.0, max(hue.r, max(hue.g, hue.b)));
   vec3 burn = (1.0 - exp(-1.4*c))*vec3(1.0, .95, .94);   // white, with a blush in it
-  return mix(hue, burn, smoothstep(0.5, 2.6, L));
+  return mix(hue, burn, smoothstep(0.8, 3.2, L));
 }
 
 void main(){
@@ -407,6 +407,9 @@ void main(){
   col = tone(col*1.05);
   vec2 q = gl_FragCoord.xy/uRes - 0.5;
   col *= 1.0 - 0.35*dot(q, q);               // a little vignette
+  // grade: richer colour and a toe, so faint haze sinks to black and the disk glows instead of looking chalky
+  col = max(mix(vec3(dot(col, vec3(.2126, .7152, .0722))), col, 1.3), 0.0);
+  col = col*col/(col + 0.03);
   col = pow(col, vec3(0.4545));
   // a grain of dither against banding, but not on true black
   if (col.r + col.g + col.b > 0.01) col += (h21(gl_FragCoord.xy + fract(uTime)) - 0.5)/255.0;
