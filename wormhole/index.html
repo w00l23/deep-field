@@ -320,7 +320,9 @@ const milkyLoaded = new Promise(done => { milkyTex = mapTexture('milkyway', fals
         vec3 d = normalize(vDir);
         vec3 eq = vec3(d.x, -uTilt.x * d.z - uTilt.y * d.y, -uTilt.y * d.z + uTilt.x * d.y);   // the map is drawn on the Earth's equator, not the plane of the planets
         vec2 uv = vec2(0.5 - atan(eq.y, eq.x) / 6.2831853, asin(clamp(eq.z, -1.0, 1.0)) / 3.1415927 + 0.5);   // right ascension runs leftward across it, from the middle
-        gl_FragColor = vec4(pow(texture2D(uSky, uv).rgb, vec3(1.1)), 1.0);
+        // a toe on the map's dark end: its faint grey haze drops to black, so only the band itself glows
+        vec3 c = max(texture2D(uSky, uv).rgb - 0.045, 0.0) / 0.955;
+        gl_FragColor = vec4(pow(c, vec3(1.45)) * 0.9, 1.0);
       }`,
     side: THREE.BackSide, depthTest: false, depthWrite: false,
   }));

@@ -80,6 +80,12 @@
     color:var(--dim);font-style:italic;
   }
 
+  /* the quiet invitation to draw in the sky; it fades once someone has */
+  .join{
+    margin:.7rem auto 0;font-size:.8rem;letter-spacing:.08em;font-style:italic;
+    color:var(--soft);transition:opacity 1.6s ease;
+  }
+  .join.used{opacity:0 !important}
   .cards{
     list-style:none;margin:0;padding:0;
     display:grid;gap:clamp(18px,2.6vw,28px);
@@ -212,6 +218,7 @@
   <header>
     <h1 class="rise">Deep Field</h1>
     <p class="tag rise" style="animation-delay:.25s">Small windows into a very big sky.</p>
+    <p class="join rise" id="join" style="animation-delay:1.6s">tap the stars to join them &#10022;</p>
   </header>
 
   <ul class="cards">
@@ -266,7 +273,11 @@
    breathing a little. Every star is a small pre-drawn sprite scaled into
    place, which is far cheaper than tracing a circle for each one on every
    frame. Still when the reader prefers less motion, and asleep when the
-   tab is hidden. */
+   tab is hidden.
+   Tapping the sky (not a card) lights the nearest star in gold; tap again
+   soon after and a soft line joins the two, so anyone can draw their own
+   constellation. It lingers a while, then fades. Now and then a shooting
+   star crosses the top of the sky. */
 (() => {
   const cv = document.getElementById('sky');
   const g = cv.getContext('2d');
@@ -279,6 +290,7 @@
 
   // one sprite per tint: a disc with a soft rim
   const TINTS = ['255,255,255', '214,222,255', '255,236,214', '226,214,255'];
+  const GOLD = '255,214,170';
   const SPRITE = 32, MID = SPRITE / 2;
   const sprites = TINTS.map(c => {
     const s = document.createElement('canvas'); s.width = s.height = SPRITE;
@@ -290,6 +302,73 @@
     grd.addColorStop(1, `rgba(${c},0)`);
     x.fillStyle = grd; x.fillRect(0, 0, SPRITE, SPRITE);
     return s;
+  });
+  const gold = (() => {                         // the same disc, in the constellation's gold
+    const s = document.createElement('canvas'); s.width = s.height = SPRITE;
+    const x = s.getContext('2d'), grd = x.createRadialGradient(MID, MID, 0, MID, MID, MID);
+    grd.addColorStop(0, `rgba(${GOLD},1)`); grd.addColorStop(0.3, `rgba(${GOLD},.75)`); grd.addColorStop(1, `rgba(${GOLD},0)`);
+    x.fillStyle = grd; x.fillRect(0, 0, SPRITE, SPRITE);
+    return s;
+  })();
+
+  // --- your own constellations -------------------------------------------
+  const JOIN = 10, STAY = 14, FADE = 4;           // seconds: to tap the next star, to linger, to fade
+  let figs = [], meteor = null, nextMeteor = 0;
+  const clock = () => performance.now() / 1000;
+  function figAlpha(f, t) { return Math.max(0, Math.min(1, 1 - (t - f.last - STAY) / FADE)); }
+  function drawFigs(t) {
+    figs = figs.filter(f => figAlpha(f, t) > 0);
+    for (const f of figs) {
+      const a = figAlpha(f, t);
+      g.lineCap = 'round';
+      for (let i = 1; i < f.pts.length; i++) {
+        const p = f.pts[i - 1], q = f.pts[i];
+        if (Math.abs(p.x - q.x) > W / 2 || Math.abs(p.y - q.y) > H / 2) continue;   // a star that wrapped round the edge breaks its line
+        const grow = Math.min(1, (t - f.born[i]) / 0.7);                             // each line draws itself out
+        const ex = p.x + (q.x - p.x) * grow, ey = p.y + (q.y - p.y) * grow;
+        g.strokeStyle = `rgba(${GOLD},${0.10 * a})`; g.lineWidth = 4;
+        g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(ex, ey); g.stroke();
+        g.strokeStyle = `rgba(${GOLD},${0.55 * a})`; g.lineWidth = 0.9;
+        g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(ex, ey); g.stroke();
+      }
+      for (const p of f.pts) {
+        const d = 7 + p.d * 2;
+        g.globalAlpha = 0.9 * a; g.drawImage(gold, p.x - d / 2, p.y - d / 2, d, d);
+        g.globalAlpha = 0.18 * a; g.drawImage(gold, p.x - d * 1.6, p.y - d * 1.6, d * 3.2, d * 3.2);
+      }
+      g.globalAlpha = 1;
+    }
+  }
+  function drawMeteor(t) {
+    if (still.matches) return;
+    if (!meteor && t > nextMeteor) {
+      if (nextMeteor) meteor = { t0: t, x: W * (0.25 + rnd() * 0.65), y: H * (0.04 + rnd() * 0.3), len: 90 + rnd() * 90, ang: Math.PI * (0.78 + rnd() * 0.1) };
+      nextMeteor = t + 22 + Math.random() * 30;
+    }
+    if (!meteor) return;
+    const k = (t - meteor.t0) / 1.1;
+    if (k >= 1) { meteor = null; return; }
+    const run = 260 * k, dx = Math.cos(meteor.ang), dy = Math.sin(meteor.ang);
+    const hx = meteor.x + dx * run, hy = meteor.y + dy * run, tl = meteor.len * Math.min(1, k * 3);
+    const a = Math.sin(Math.PI * k) * 0.7;
+    const grd = g.createLinearGradient(hx, hy, hx - dx * tl, hy - dy * tl);
+    grd.addColorStop(0, `rgba(255,240,230,${a})`); grd.addColorStop(1, 'rgba(255,240,230,0)');
+    g.strokeStyle = grd; g.lineWidth = 1.2; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(hx, hy); g.lineTo(hx - dx * tl, hy - dy * tl); g.stroke();
+  }
+  document.addEventListener('click', e => {
+    if (e.target.closest('a,button,.card,.about,footer')) return;   // the cards and links keep their taps
+    const reach = matchMedia('(pointer: coarse)').matches ? 40 : 26;
+    let best = null, bd = reach * reach;
+    for (const s of stars) { const d = (s.x - e.clientX) ** 2 + (s.y - e.clientY) ** 2; if (d < bd) { bd = d; best = s; } }
+    if (!best) return;
+    const t = clock();
+    let f = figs[figs.length - 1];
+    if (!f || t - f.last > JOIN || figAlpha(f, t) < 1) { f = { pts: [], born: [], last: t }; figs.push(f); if (figs.length > 4) figs.shift(); }
+    if (f.pts[f.pts.length - 1] === best) return;
+    f.pts.push(best); f.born.push(t); f.last = t;
+    document.getElementById('join')?.classList.add('used');
+    wake();
   });
 
   function build() {
@@ -332,18 +411,26 @@
       }
     }
     g.globalAlpha = 1;
+    const c = clock();
+    drawFigs(c); drawMeteor(c);
   }
 
   function frame(now) {
     const t = now / 1000, dt = last ? Math.min(t - last, 0.1) : 0;
     last = t;
+    if (still.matches) {                         // the stars hold still; only a constellation being drawn or fading moves
+      draw(0, 0);
+      raf = figs.length ? requestAnimationFrame(frame) : 0;
+      return;
+    }
     draw(t, dt);
     raf = requestAnimationFrame(frame);
   }
+  function wake() { if (!raf && !document.hidden) { last = 0; raf = requestAnimationFrame(frame); } }
 
   function start() {
-    cancelAnimationFrame(raf); last = 0;
-    if (still.matches || document.hidden) { draw(0, 0); return; }
+    cancelAnimationFrame(raf); raf = 0; last = 0;
+    if (still.matches || document.hidden) { draw(0, 0); if (!document.hidden && figs.length) wake(); return; }
     raf = requestAnimationFrame(frame);
   }
 
