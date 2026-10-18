@@ -181,6 +181,25 @@
     transition:opacity .6s ease;
   }
   #bar > *{pointer-events:auto}
+  /* the second row on a phone; on wider screens its pills just sit in the one row */
+  #bar > .row2{display:contents;pointer-events:none}
+  .row2 > *{pointer-events:auto}
+  #ourDay{padding:0 .8rem;font-size:.95rem}
+  #dayPick{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0}
+  /* a day to remember: the words above the bar, and the way to send it */
+  #dayLine{
+    position:fixed;z-index:3;left:0;right:0;margin:0;
+    bottom:calc(1.5rem + var(--barh,34px) + var(--sab));
+    display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:.4rem .7rem;
+    padding:0 1rem;text-align:center;
+    font-size:.8rem;letter-spacing:.06em;font-style:italic;color:#e9d9cf;
+    text-shadow:0 0 12px rgba(0,0,0,.95);
+    opacity:0;pointer-events:none;transition:opacity .8s ease;
+  }
+  #dayLine.on{opacity:1}
+  #dayLine.on .pill{pointer-events:auto}
+  #daySend{font-style:normal;height:30px;border-color:rgba(255,214,190,.28)}
+  body.ourday .hint{opacity:0}
   .pace{display:inline-flex;align-items:center;gap:0}
   .pace .pill{border-radius:0;border-left-width:0}
   .pace .pill:first-child{border-radius:999px 0 0 999px;border-left-width:1px;padding:0 .7rem 0 .85rem}
@@ -275,6 +294,7 @@
 
   @media (max-width:480px){
     .pill{font-size:.7rem;padding:0 .7rem}
+    #bar > .row2{display:flex;flex-wrap:wrap;justify-content:center;gap:.45rem;flex-basis:100%}
     #paceLabel{min-width:6.9rem}
     .hint{font-size:.74rem;bottom:calc(1.9rem + var(--barh,75px) + var(--sab))}
   }
@@ -282,7 +302,7 @@
     .hint{display:none}
   }
   @media (prefers-reduced-motion: reduce){
-    .hint,#veil,#label,.pill,#bar,#far,.tag,.ring{transition:none}
+    .hint,#veil,#label,.pill,#bar,#far,.tag,.ring,#dayLine{transition:none}
   }
 </style>
 </head>
@@ -305,17 +325,22 @@
 
 <div id="bar">
   <button class="pill" id="date" type="button" aria-label="Date shown. Tap to come back to today."></button>
+  <button class="pill" id="ourDay" type="button" aria-label="Pick a day to remember and see its sky">&#9825;</button>
+  <input type="date" id="dayPick" min="1000-01-01" max="2999-12-31" tabindex="-1" aria-hidden="true">
   <span class="pace" role="group" aria-label="Pace of time">
     <button class="pill" id="slower" type="button" aria-label="Slower"><span class="sign">−</span></button>
     <button class="pill" id="paceLabel" type="button" aria-label="Pause or play"></button>
     <button class="pill" id="faster" type="button" aria-label="Faster"><span class="sign">+</span></button>
   </span>
+  <span class="row2">
   <button class="pill" id="scale" type="button" aria-pressed="false" data-en="true distances" data-es="distancias reales">true distances</button>
   <button class="pill" id="journey" type="button" aria-pressed="false" data-en="through the galaxy" data-es="por la galaxia">through the galaxy</button>
   <button class="pill" id="eclipse" type="button" data-en="next eclipse" data-es="próximo eclipse">next eclipse</button>
   <button class="pill" id="sky" type="button" aria-pressed="false" data-en="your sky tonight" data-es="tu cielo esta noche">your sky tonight</button>
   <span class="pill" id="placePill"><span id="placeName"></span><select id="place" aria-label="Where you are"></select></span>
+  </span>
 </div>
+<p id="dayLine" aria-live="polite"><span id="dayWords"></span><button class="pill" id="daySend" type="button">send this sky &rsaquo;</button></p>
 
 <div id="veil" aria-hidden="true"></div>
 
@@ -3829,12 +3854,14 @@ void main() {
     if (skyOn && PLACE.tz) o.timeZone = PLACE.tz;
     let s;
     try { s = d.toLocaleDateString(LANG, o); } catch (e) { delete o.timeZone; s = d.toLocaleDateString(LANG, o); }
-    if (r < 0.2) s += ' · ' + (skyOn ? clock(jd) : d.toLocaleTimeString(LANG, { hour: '2-digit', minute: '2-digit' }));
+    const onDay = dayJd !== null && Math.abs(jd - dayJd) < 0.01;   // (a picked day is always nine in the evening: no clock needed)
+    if (r < 0.2 && !onDay) s += ' · ' + (skyOn ? clock(jd) : d.toLocaleTimeString(LANG, { hour: '2-digit', minute: '2-digit' }));
     return s;
   }
   function words(now) {
     if (now - wordsAt < 120) return;
     wordsAt = now;
+    if (dayJd !== null && Math.abs(jd - dayJd) > 1) dayOff();
     const d = dateWords(), p = paceWords();
     // (longer words can send a pill to the next row: the bar is measured again)
     const rows = d !== dateWas || p !== paceWas;
@@ -3854,7 +3881,61 @@ void main() {
       farBox = r ? [r.left - 6, r.top - 4, r.right + 6, r.bottom + 4] : null;
     }
   }
-  elDate.addEventListener('click', () => { jd = jdOf(Date.now()); atNow = true; wordsAt = 0; });
+  elDate.addEventListener('click', () => { jd = jdOf(Date.now()); atNow = true; wordsAt = 0; dayOff(); });
+
+  // --- a day to remember ------------------------------------------------------
+  // ♡ picks a date; the sky stops at nine that evening, and a link to it can be sent.
+  // The link is ?day=2024-02-14, and opens the same way for whoever receives it.
+  const elDayLine = $('dayLine'), elDayWords = $('dayWords'), elDaySend = $('daySend'), elPick = $('dayPick');
+  let dayJd = null, dayKey = '';
+  function dayOn(key, fromLink) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key || '');
+    if (!m) return false;
+    const d = new Date(+m[1], +m[2] - 1, +m[3], 21, 0);
+    if (!isFinite(d) || d.getMonth() !== +m[2] - 1) return false;
+    d.setFullYear(+m[1]);                      // (years below 100 are not taken as 19xx)
+    jd = dayJd = jdOf(d.getTime()); dayKey = key; atNow = false; setPaused(true);
+    let said;
+    try { said = d.toLocaleDateString(LANG, { day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { said = key; }
+    elDayWords.textContent = '\u2661 ' + T('the sky on ' + said, 'el cielo del ' + said);
+    elDaySend.textContent = T('send this sky \u203a', 'enviar este cielo \u203a');
+    elDayLine.classList.add('on'); document.body.classList.add('ourday');
+    if (!fromLink) { try { const q = new URLSearchParams(location.search); q.set('day', key); q.delete('date'); history.replaceState(null, '', '?' + q); } catch (e) {} }
+    return true;
+  }
+  function dayOff() {
+    if (dayJd === null) return;
+    dayJd = null; elDayLine.classList.remove('on'); document.body.classList.remove('ourday');
+    try { const q = new URLSearchParams(location.search); q.delete('day'); const r = q.toString(); history.replaceState(null, '', r ? '?' + r : location.pathname); } catch (e) {}
+  }
+  $('ourDay').addEventListener('click', () => {
+    const d = new Date(msOf(jd));
+    if (isFinite(d)) elPick.value = String(d.getFullYear()).padStart(4, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    try { elPick.showPicker(); } catch (e) { elPick.focus(); elPick.click(); }
+  });
+  elPick.addEventListener('change', () => { if (elPick.value) dayOn(elPick.value); });
+  elDaySend.addEventListener('click', async () => {
+    const url = location.origin + location.pathname + '?day=' + dayKey + (LANG === 'es' ? '&lang=es' : '');
+    const words = elDayWords.textContent.replace(/^\u2661 /, '');
+    try { if (navigator.share && COARSE) { await navigator.share({ title: words, url }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(url); elDaySend.textContent = T('link copied \u2713', 'enlace copiado \u2713'); }
+    catch (e) { prompt(T('Copy this link:', 'Copia este enlace:'), url); }
+    setTimeout(() => { if (dayJd !== null) elDaySend.textContent = T('send this sky \u203a', 'enviar este cielo \u203a'); }, 2200);
+  });
+
+  // on a phone the bar's words are shorter, so it sits in two tidy rows
+  const SHORT = { scale: ['true scale', 'escala real'], journey: ['galaxy', 'galaxia'], eclipse: ['eclipse', 'eclipse'], sky: ['your sky', 'tu cielo'] };
+  const NARROW = matchMedia('(max-width:480px)');
+  function barWords() {
+    for (const k in SHORT) {
+      const el = $(k), full = el.getAttribute(LANG === 'es' ? 'data-es' : 'data-en');
+      el.textContent = NARROW.matches ? T(SHORT[k][0], SHORT[k][1]) : full;
+      if (NARROW.matches) el.setAttribute('aria-label', full); else el.removeAttribute('aria-label');
+    }
+    barRows();
+  }
+  barWords();
+  NARROW.addEventListener?.('change', barWords);
   $('slower').addEventListener('click', () => {
     if (factor === 0) return;
     factor = factor <= 1 / 256 ? 0 : factor / STEPS;
@@ -4076,6 +4157,7 @@ void main() {
   // (the ground needs the air and the air needs WebGL)
   if (!GLOK) elSky.style.display = 'none';
   else if (QS.get('sky') === '1') enterSky(!!QS.get('date'), true);
+  if (QS.get('day')) { dayOn(QS.get('day'), true); place(jd); }
 
   // for scripts, and for the curious
   window.__solar = {

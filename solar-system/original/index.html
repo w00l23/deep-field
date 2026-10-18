@@ -48,6 +48,7 @@
     pointer-events:none;
     transition:opacity 1.2s ease;
     text-align:center;
+    white-space:nowrap;
     line-height:1.7;
   }
   .hint.gone{opacity:0}
@@ -82,6 +83,8 @@
   const ctx = cv.getContext('2d');
   const hint = document.getElementById('hint');
   const label = document.getElementById('label');
+  // on touch screens you pinch, not scroll
+  if (matchMedia('(pointer: coarse)').matches) hint.innerHTML = 'drag to turn &nbsp;·&nbsp; pinch to come closer';
 
   let W = 0, H = 0, DPR = 1;
 
