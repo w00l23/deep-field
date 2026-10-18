@@ -204,6 +204,8 @@ uniform float uTime;
 uniform float uPix;       // angular size of one rendered pixel, radians
 uniform float uDot;       // the same for one CSS pixel: how big a star should look
 uniform float uPulse;     // 0..1, the beat of the visitor's own music: a breath on the disk, else 0
+uniform float uLevel;     // 0..1, how loud the music is, slowly smoothed: the disk's glow breathes with it
+uniform mat3  uSky;       // turns the traced sky back to the visitor's own view, so the stars stay put while the hole turns
 
 const float PI     = 3.14159265;
 const float R_IN   = 2.9;      // the disk, just inside the last stable orbit
@@ -268,7 +270,7 @@ vec4 disk(vec3 p, vec3 dir, float s, float fine){
   float boost = mix(1.0, dop*dop*dop, 0.45);
   vec3 col = palette(clamp(u - 0.1*(dop - 1.0), 0.0, 1.0));
   float bright = 2.4*pow(R_IN/r, 2.2) * (0.22 + 1.25*n) * boost * edge;
-  bright *= 1.0 + 0.1*uPulse;                 // the disk breathes a little with the music
+  bright *= 1.0 + 0.1*uPulse + 0.08*uLevel;   // the disk breathes a little with the music
   // close underfoot the near disk would fill the view: dim it and let it thin
   float near = smoothstep(0.8, 6.0, s);
   bright *= mix(0.07, 1.0, near);
@@ -370,7 +372,7 @@ void main(){
       float y0 = pp.y/hh, y1 = p.y/hh, dy = y1 - y0;
       float hz = abs(dy) > 1e-3 ? 0.8862*(erfa(y1) - erfa(y0))/dy : exp(-y0*y0);
       hz *= smoothstep(R_IN - 1.0, R_IN + 1.2, rz)*(1.0 - smoothstep(R_OUT - 4.0, R_OUT + 1.0, rz));
-      glow += T*vec3(1.0, .42, .55)*hz*0.07*(1.0 + 0.12*uPulse)*dt/(rz*rz + 0.5)*smoothstep(0.5, 5.0, s);
+      glow += T*vec3(1.0, .42, .55)*hz*0.07*(1.0 + 0.12*uPulse + 0.16*uLevel)*dt/(rz*rz + 0.5)*smoothstep(0.5, 5.0, s);
       // crossing the disk plane
       if (pp.y*p.y < 0.0){
         float f = pp.y/(pp.y - p.y);
@@ -402,7 +404,7 @@ void main(){
     float halo = db > 0.0 ? exp(-db*7.0)*0.07 : 0.0;
     col += T*T*(core*1.4*(1.0 + 0.05*uPulse)*vec3(1.0, .74, .62) + halo*vec3(1.0, .55, .62));
   }
-  if (escaped) col += T*background(dout);
+  if (escaped) col += T*background(uSky*dout);
 
   col = tone(col*1.05);
   vec2 q = gl_FragCoord.xy/uRes - 0.5;
@@ -453,7 +455,7 @@ void main(){
     const loc = gl.getAttribLocation(prog, 'aPos');
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    for (const n of ['uRes','uCam','uRight','uUp','uFwd','uTanHalf','uTime','uPix','uDot','uPulse']) U[n] = gl.getUniformLocation(prog, n);
+    for (const n of ['uRes','uCam','uRight','uUp','uFwd','uTanHalf','uTime','uPix','uDot','uPulse','uLevel','uSky']) U[n] = gl.getUniformLocation(prog, n);
     return true;
   }
   try {
@@ -471,15 +473,50 @@ void main(){
   const vel = { yaw: 0, pitch: 0 };          // a little inertia after a drag
   const PITCH_MAX = 80*DEG, DIST_MIN = 4.6, DIST_MAX = 42;
   let pos = [0,0,0], right = [0,0,0], up = [0,0,0], fwd = [0,0,0], tanHalf = 0.55;
+  const sky = new Float32Array([1,0,0, 0,1,0, 0,0,1]);
+
+  /* Cinematic mode: while the visitor's song plays, the hole and its disk turn and
+     tilt on their own, like a slow film shot. It is the camera that moves around the
+     hole, but the sky is turned back by the same amount (sky, above), so on screen
+     the stars hold still and only the hole, its disk and its rings move. The pace
+     eases in as the song starts and settles to a stop when it pauses; the shot is
+     kept where it stopped. Never with reduced motion. */
+  const cine = { speed: 0, turn: 0, phase: 0, yaw: 0, pitch: 0, roll: 0 };
+  function cinema(dt, playing){
+    cine.speed = ease(cine.speed, playing ? 1 : 0, dt, playing ? 0.3 : 0.45);
+    if (cine.speed < 1e-4 && !playing){ cine.speed = 0; return; }
+    const v = cine.speed*dt;
+    cine.turn += v; cine.phase += v;
+    cine.yaw = 0.018*cine.turn;                                   // a slow turn: once round in about six minutes
+    cine.pitch = 11*DEG*Math.sin(cine.phase*2*Math.PI/64);        // the disk tips toward edge-on and back over a minute
+    cine.roll = 5*DEG*Math.sin(cine.phase*2*Math.PI/41 + 0.6) - 5*DEG*Math.sin(0.6);   // a gentle bank, from level
+  }
+
+  // a camera looking at the hole from (yaw, pitch, dist), turned by roll about its view
+  function frameAt(yaw, pitch, roll){
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const P = [cam.dist*cp*Math.cos(yaw), cam.dist*sp, cam.dist*cp*Math.sin(yaw)];
+    const L = Math.hypot(P[0], P[1], P[2]);
+    const F = [-P[0]/L, -P[1]/L, -P[2]/L];
+    const rl = Math.hypot(F[2], F[0]);
+    let R = [-F[2]/rl, 0, F[0]/rl];
+    let Up = [R[1]*F[2] - R[2]*F[1], R[2]*F[0] - R[0]*F[2], R[0]*F[1] - R[1]*F[0]];
+    if (roll){
+      const c = Math.cos(roll), s = Math.sin(roll);
+      [R, Up] = [R.map((x, i) => x*c + Up[i]*s), Up.map((x, i) => x*c - R[i]*s)];
+    }
+    return {P, R, Up, F};
+  }
 
   function basis(){
-    const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
-    pos = [cam.dist*cp*Math.cos(cam.yaw), cam.dist*sp, cam.dist*cp*Math.sin(cam.yaw)];
-    const L = Math.hypot(pos[0], pos[1], pos[2]);
-    fwd = [-pos[0]/L, -pos[1]/L, -pos[2]/L];
-    const rl = Math.hypot(fwd[2], fwd[0]);
-    right = [-fwd[2]/rl, 0, fwd[0]/rl];
-    up = [right[1]*fwd[2] - right[2]*fwd[1], right[2]*fwd[0] - right[0]*fwd[2], right[0]*fwd[1] - right[1]*fwd[0]];
+    const p = Math.min(85*DEG, Math.max(-85*DEG, cam.pitch + cine.pitch));
+    const f = frameAt(cam.yaw + cine.yaw, p, cine.roll);
+    pos = f.P; right = f.R; up = f.Up; fwd = f.F;
+    // sky = base * cinematic^T: a direction seen at some spot on screen in the turned
+    // view looks up the star that sits at that same spot in the visitor's own view
+    const b = frameAt(cam.yaw, cam.pitch, 0), B = [b.R, b.Up, b.F], C = [f.R, f.Up, f.F];
+    for (let col = 0; col < 3; col++) for (let row = 0; row < 3; row++)
+      sky[col*3 + row] = B[0][row]*C[0][col] + B[1][row]*C[1][col] + B[2][row]*C[2][col];
     // the view opens as the hole fills it, so the closest view still holds the whole ring
     // (a tall phone screen frames the far view a little tighter, so the hole isn't lost in it)
     const k = Math.min(1, Math.max(0, (14 - cam.dist)/(14 - DIST_MIN)));
@@ -944,12 +981,19 @@ void main(){
   // picture and a steady hum doesn't, with a soft ceiling so loud music never pins it.
   // It rises over a fifth of a second and settles over about a second: a breath, never a
   // flicker. Every rate is per second, so any frame rate gives the same motion
-  let env = 0, avg = -1, pulse = 0;
+  // level: how loud the song is overall (bass to upper mids), eased over a second or so,
+  // so the disk's glow swells and sinks with the music instead of flashing with it
+  let env = 0, avg = -1, pulse = 0, level = 0;
   function beat(dt){
-    let to = 0;
+    let to = 0, lv = 0;
     if (analyser && loaded && !audio.paused && ac.state === 'running'){
       analyser.getByteFrequencyData(fdata);
       const bw = ac.sampleRate/analyser.fftSize;
+      const j0 = Math.max(1, Math.round(30/bw)), j1 = Math.max(j0, Math.round(2000/bw));
+      let m = 0;
+      for (let i = j0; i <= j1; i++) m += fdata[i];
+      m /= 255*(j1 - j0 + 1);
+      lv = Math.min(1, Math.max(0, (m - 0.12)/0.5)); lv = lv*lv*(3 - 2*lv);
       const i0 = Math.max(1, Math.round(40/bw)), i1 = Math.max(i0, Math.round(160/bw));
       let e = 0;
       for (let i = i0; i <= i1; i++) e += fdata[i];
@@ -964,6 +1008,8 @@ void main(){
     } else { env = 0; avg = -1; }
     pulse = ease(pulse, to, dt, to > pulse ? 6 : 1.6);
     if (pulse < 1e-3) pulse = 0;
+    level = ease(level, lv, dt, 1.1);
+    if (level < 1e-3) level = 0;
   }
 
   /* ---- the loop ---- */
@@ -993,6 +1039,7 @@ void main(){
       cam.yaw = ease(cam.yaw, tgt.yaw, dt, 5);
       cam.pitch = ease(cam.pitch, tgt.pitch, dt, 5);
       cam.dist = ease(cam.dist, tgt.dist, dt, touched ? 2.6 : 0.45);   // the first drift in is slowest
+      cinema(dt, loaded && !audio.paused && songOn());
     }
     basis();
     if (ambOn) ambientNear(Math.min(1, Math.max(0, (START - cam.dist)/(START - DIST_MIN))));
@@ -1008,6 +1055,8 @@ void main(){
     gl.uniform1f(U.uPix, 2*tanHalf/Math.min(sizeW, sizeH));
     gl.uniform1f(U.uDot, 2*tanHalf/Math.min(cssW, cssH));
     gl.uniform1f(U.uPulse, pulse);
+    gl.uniform1f(U.uLevel, level);
+    gl.uniformMatrix3fv(U.uSky, false, sky);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     layers(dt);
 
