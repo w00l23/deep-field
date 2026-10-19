@@ -75,7 +75,9 @@ Each sim's folder has the full table in its `CREDITS.md`
 including how each map was reduced or changed. The pictures are public
 domain (NASA, USGS); Gaia and SIMBAD ask to be named.
 
-Built with [Claude](https://claude.ai) as pair programmer.
+
+Built with [Claude](https://claude.ai) as pair programmer and thinking partner.
+
 
 ## Licence
 
