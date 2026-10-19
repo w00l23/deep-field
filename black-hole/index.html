@@ -213,7 +213,8 @@ const float R_OUT  = 12.0;
 const float R_FAR  = 16.0;     // march inside this sphere; bend analytically outside
 const float B_CRIT = 2.598076; // 3*sqrt(3)/2: the edge of the shadow
 const int   STEPS  = 150;
-const float SWAP   = 90.0;     // seconds between fresh disk patterns (see disk())
+const float SWAP   = 60.0;     // seconds between fresh disk patterns (see disk())
+const float ARM_W  = 0.21;     // the light's sweep around the disk, radians a second: once round in 30 s
 
 /* a hash without a lattice in it (after Dave Hoskins' hash12) */
 float h21(vec2 p){ vec3 q = fract(vec3(p.xyx)*0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y)*q.z); }
@@ -257,7 +258,7 @@ vec4 disk(vec3 p, vec3 dir, float s, float fine){
   float lr = log(r);
   // Keplerian turning: the inner edge laps the outer. Sheared noise winds ever
   // tighter, so two patterns take turns, each fading out before it gets thin.
-  float w = 0.75/(r*sqrt(r));
+  float w = 1.1/(r*sqrt(r));
   float t1 = mod(uTime, SWAP), t2 = mod(uTime + 0.5*SWAP, SWAP);
   float k = abs(2.0*t1/SWAP - 1.0);
   float n = mix(streaks((phi - w*t1)/(2.0*PI), lr, 0.0, fine), streaks((phi - w*t2)/(2.0*PI), lr, 17.0, fine), k);
@@ -269,7 +270,11 @@ vec4 disk(vec3 p, vec3 dir, float s, float fine){
   float dop = sqrt(1.0 - beta*beta)/(1.0 - beta*dot(t, -dir));
   float boost = mix(1.0, dop*dop*dop, 0.45);
   vec3 col = palette(clamp(u - 0.1*(dop - 1.0), 0.0, 1.0));
-  float bright = 2.4*pow(R_IN/r, 2.2) * (0.22 + 1.25*n) * boost * edge;
+  // two soft arms of light sweep round the disk together, a slow rose spiral
+  // (like a galaxy's arms, they turn as one shape and never wind up)
+  float arm = 0.5 + 0.5*cos(2.0*(phi - ARM_W*uTime) - 3.2*lr);
+  float sweep = 0.8 + 0.55*arm*arm;
+  float bright = 2.4*pow(R_IN/r, 2.2) * (0.22 + 1.25*n) * boost * edge * sweep;
   bright *= 1.0 + 0.1*uPulse + 0.08*uLevel;   // the disk breathes a little with the music
   // close underfoot the near disk would fill the view: dim it and let it thin
   float near = smoothstep(0.8, 6.0, s);
