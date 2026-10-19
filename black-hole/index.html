@@ -213,7 +213,8 @@ const float R_OUT  = 12.0;
 const float R_FAR  = 16.0;     // march inside this sphere; bend analytically outside
 const float B_CRIT = 2.598076; // 3*sqrt(3)/2: the edge of the shadow
 const int   STEPS  = 150;
-const float SWAP   = 90.0;     // seconds between fresh disk patterns (see disk())
+const float SWAP   = 60.0;     // seconds between fresh disk patterns (see disk())
+const float ARM_W  = 0.21;     // the light's sweep around the disk, radians a second: once round in 30 s
 
 /* a hash without a lattice in it (after Dave Hoskins' hash12) */
 float h21(vec2 p){ vec3 q = fract(vec3(p.xyx)*0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y)*q.z); }
@@ -257,7 +258,7 @@ vec4 disk(vec3 p, vec3 dir, float s, float fine){
   float lr = log(r);
   // Keplerian turning: the inner edge laps the outer. Sheared noise winds ever
   // tighter, so two patterns take turns, each fading out before it gets thin.
-  float w = 0.75/(r*sqrt(r));
+  float w = 1.1/(r*sqrt(r));
   float t1 = mod(uTime, SWAP), t2 = mod(uTime + 0.5*SWAP, SWAP);
   float k = abs(2.0*t1/SWAP - 1.0);
   float n = mix(streaks((phi - w*t1)/(2.0*PI), lr, 0.0, fine), streaks((phi - w*t2)/(2.0*PI), lr, 17.0, fine), k);
@@ -269,7 +270,11 @@ vec4 disk(vec3 p, vec3 dir, float s, float fine){
   float dop = sqrt(1.0 - beta*beta)/(1.0 - beta*dot(t, -dir));
   float boost = mix(1.0, dop*dop*dop, 0.45);
   vec3 col = palette(clamp(u - 0.1*(dop - 1.0), 0.0, 1.0));
-  float bright = 2.4*pow(R_IN/r, 2.2) * (0.22 + 1.25*n) * boost * edge;
+  // two soft arms of light sweep round the disk together, a slow rose spiral
+  // (like a galaxy's arms, they turn as one shape and never wind up)
+  float arm = 0.5 + 0.5*cos(2.0*(phi - ARM_W*uTime) - 3.2*lr);
+  float sweep = 0.8 + 0.55*arm*arm;
+  float bright = 2.4*pow(R_IN/r, 2.2) * (0.22 + 1.25*n) * boost * edge * sweep;
   bright *= 1.0 + 0.1*uPulse + 0.08*uLevel;   // the disk breathes a little with the music
   // close underfoot the near disk would fill the view: dim it and let it thin
   float near = smoothstep(0.8, 6.0, s);
@@ -475,21 +480,53 @@ void main(){
   let pos = [0,0,0], right = [0,0,0], up = [0,0,0], fwd = [0,0,0], tanHalf = 0.55;
   const sky = new Float32Array([1,0,0, 0,1,0, 0,0,1]);
 
-  /* Cinematic mode: while the visitor's song plays, the hole and its disk turn and
-     tilt on their own, like a slow film shot. It is the camera that moves around the
-     hole, but the sky is turned back by the same amount (sky, above), so on screen
-     the stars hold still and only the hole, its disk and its rings move. The pace
-     eases in as the song starts and settles to a stop when it pauses; the shot is
-     kept where it stopped. Never with reduced motion. */
-  const cine = { speed: 0, turn: 0, phase: 0, yaw: 0, pitch: 0, roll: 0 };
+  /* Cinematic camera: while the visitor's song plays, the camera works through a slow
+     loop of five shots, each about 36 s, easing from one into the next:
+       1 push in   2 orbit   3 tilt down to edge-on   4 tilt up to top-down   5 pull back.
+     It steers the same targets the visitor does, so dragging or the arrow keys take
+     over at once; the loop picks up again after 10 s without a touch. Pausing the song
+     lets it glide to a stop where it is. The stars only follow a twentieth of the camera's
+     own moves (sky, in basis()), so they drift a little and the hole stays the hero.
+     Never with reduced motion. */
+  const SHOT = 36, IDLE = 10, STAR_DRIFT = 0.05;
+  // where each shot ends up: pitch above the disk, distance, and how fast it turns at its middle
+  const SHOTS = [
+    { pitch: 12*DEG, dist: 17,    spin: 0.2  },   // 1 a slow push in
+    { pitch: 13*DEG, dist: 17,    spin: 0.35 },   // 2 the orbit, a little quicker
+    { pitch: 1.5*DEG, dist: 18,   spin: 0.2  },   // 3 down to edge-on: the thin bright line, the ring above and below
+    { pitch: 68*DEG, dist: 16,    spin: 0.2  },   // 4 up to top-down: the full rose ring
+    { pitch: 10*DEG, dist: START, spin: 0.2  },   // 5 back out wide, then round again
+  ];
+  const SPIN_BASE = 0.2;                         // the hole keeps turning, once round in about half a minute
+  const cine = { speed: 0, hand: 0, t: 0, yaw: 0, pitch: 0 };   // yaw/pitch: how far the camera itself has moved the view
+  let lastHand = -1e9;                           // when the visitor last steered
+  const handOn = () => { lastHand = performance.now(); };
+  const smoother = x => x*x*x*(x*(6*x - 15) + 10);
+  function shotAt(t){
+    const i = Math.floor(t/SHOT) % SHOTS.length, x = (t % SHOT)/SHOT;
+    const a = SHOTS[(i + SHOTS.length - 1) % SHOTS.length], b = SHOTS[i], k = smoother(x);
+    const sn = Math.sin(Math.PI*x);
+    return { pitch: a.pitch + (b.pitch - a.pitch)*k,
+             dist: Math.exp(Math.log(a.dist) + (Math.log(b.dist) - Math.log(a.dist))*k),
+             spin: SPIN_BASE + (b.spin - SPIN_BASE)*sn*sn };
+  }
   function cinema(dt, playing){
+    // speed: the song's pace, easing in and out; hand: 0 while the visitor steers, back to 1 after a rest
     cine.speed = ease(cine.speed, playing ? 1 : 0, dt, playing ? 0.3 : 0.45);
-    if (cine.speed < 1e-4 && !playing){ cine.speed = 0; return; }
-    const v = cine.speed*dt;
-    cine.turn += v; cine.phase += v;
-    cine.yaw = 0.018*cine.turn;                                   // a slow turn: once round in about six minutes
-    cine.pitch = 11*DEG*Math.sin(cine.phase*2*Math.PI/64);        // the disk tips toward edge-on and back over a minute
-    cine.roll = 5*DEG*Math.sin(cine.phase*2*Math.PI/41 + 0.6) - 5*DEG*Math.sin(0.6);   // a gentle bank, from level
+    const free = !dragging && performance.now() - lastHand > IDLE*1000;
+    cine.hand = free ? ease(cine.hand, 1, dt, 0.35) : ease(cine.hand, 0, dt, 6);
+    const w = cine.speed*cine.hand;
+    if (!playing && cine.speed < 1e-4) cine.speed = 0;
+    if (w < 1e-4) return;
+    cine.t += w*dt;
+    const s = shotAt(cine.t);
+    const dy = s.spin*w*dt;
+    const pull = 1 - Math.exp(-dt*0.5*w);        // a soft follow, so even a hand-off is eased
+    const dp = (s.pitch - tgt.pitch)*pull;
+    tgt.yaw += dy; tgt.pitch += dp;
+    tgt.dist = Math.exp(Math.log(tgt.dist) + (Math.log(s.dist) - Math.log(tgt.dist))*pull);
+    clampTgt();
+    cine.yaw += dy; cine.pitch += dp;
   }
 
   // a camera looking at the hole from (yaw, pitch, dist), turned by roll about its view
@@ -509,12 +546,12 @@ void main(){
   }
 
   function basis(){
-    const p = Math.min(85*DEG, Math.max(-85*DEG, cam.pitch + cine.pitch));
-    const f = frameAt(cam.yaw + cine.yaw, p, cine.roll);
+    const f = frameAt(cam.yaw, cam.pitch, 0);
     pos = f.P; right = f.R; up = f.Up; fwd = f.F;
-    // sky = base * cinematic^T: a direction seen at some spot on screen in the turned
-    // view looks up the star that sits at that same spot in the visitor's own view
-    const b = frameAt(cam.yaw, cam.pitch, 0), B = [b.R, b.Up, b.F], C = [f.R, f.Up, f.F];
+    // sky = base * camera^T: the stars are drawn as seen from a view that took the
+    // visitor's own moves in full but only a twentieth of the cinematic camera's
+    const bp = Math.min(85*DEG, Math.max(-85*DEG, cam.pitch - (1 - STAR_DRIFT)*cine.pitch));
+    const b = frameAt(cam.yaw - (1 - STAR_DRIFT)*cine.yaw, bp, 0), B = [b.R, b.Up, b.F], C = [f.R, f.Up, f.F];
     for (let col = 0; col < 3; col++) for (let row = 0; row < 3; row++)
       sky[col*3 + row] = B[0][row]*C[0][col] + B[1][row]*C[1][col] + B[2][row]*C[2][col];
     // the view opens as the hole fills it, so the closest view still holds the whole ring
@@ -702,7 +739,7 @@ void main(){
     try { cv.setPointerCapture(e.pointerId); } catch (_) {}
     resumeSound();                           // iOS can leave the sound interrupted; a touch brings it back
     ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-    dragging = true; vel.yaw = vel.pitch = 0;
+    dragging = true; vel.yaw = vel.pitch = 0; handOn();
     if (ptrs.size === 2){ const [a, b] = [...ptrs.values()]; pinchD = Math.hypot(a[0]-b[0], a[1]-b[1]); }
     firstTouch(); wake();
   });
@@ -725,6 +762,7 @@ void main(){
   });
   const release = e => {
     ptrs.delete(e.pointerId); pinchD = 0;
+    handOn();
     if (!ptrs.size){ dragging = false; if (performance.now() - lastMove > 80) vel.yaw = vel.pitch = 0; }
     wake();
   };
@@ -734,7 +772,7 @@ void main(){
     e.preventDefault();
     const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 120 : 1;
     tgt.dist *= Math.exp(Math.max(-200, Math.min(200, e.deltaY*k))*0.0012);
-    clampTgt(); firstTouch(); wake();
+    clampTgt(); firstTouch(); handOn(); wake();
   }, {passive:false});
   addEventListener('keydown', e => {
     if (e.target && e.target !== cv && e.target !== document.body) return;
@@ -747,7 +785,7 @@ void main(){
     else if (k === '+' || k === '=' || k === 'PageUp') tgt.dist *= 0.86;
     else if (k === '-' || k === '_' || k === 'PageDown') tgt.dist *= 1.16;
     else return;
-    e.preventDefault(); clampTgt(); firstTouch(); wake();
+    e.preventDefault(); clampTgt(); firstTouch(); handOn(); wake();
   });
   addEventListener('resize', () => { fit(); wake(); });
 
