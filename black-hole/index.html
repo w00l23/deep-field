@@ -485,19 +485,19 @@ void main(){
        1 push in   2 orbit   3 tilt down to edge-on   4 tilt up to top-down   5 pull back.
      It steers the same targets the visitor does, so dragging or the arrow keys take
      over at once; the loop picks up again after 10 s without a touch. Pausing the song
-     lets it glide to a stop where it is. The stars only follow a tenth of the camera's
+     lets it glide to a stop where it is. The stars only follow a twentieth of the camera's
      own moves (sky, in basis()), so they drift a little and the hole stays the hero.
      Never with reduced motion. */
-  const SHOT = 36, IDLE = 10, STAR_DRIFT = 0.1;
+  const SHOT = 36, IDLE = 10, STAR_DRIFT = 0.05;
   // where each shot ends up: pitch above the disk, distance, and how fast it turns at its middle
   const SHOTS = [
-    { pitch: 12*DEG, dist: 17,    spin: 0.02  },   // 1 a slow push in
-    { pitch: 13*DEG, dist: 17,    spin: 0.075 },   // 2 a gentle orbit, about 90° round
-    { pitch: 1.5*DEG, dist: 18,   spin: 0.02  },   // 3 down to edge-on: the thin bright line, the ring above and below
-    { pitch: 68*DEG, dist: 16,    spin: 0.025 },   // 4 up to top-down: the full rose ring
-    { pitch: 10*DEG, dist: START, spin: 0.02  },   // 5 back out wide, then round again
+    { pitch: 12*DEG, dist: 17,    spin: 0.2  },   // 1 a slow push in
+    { pitch: 13*DEG, dist: 17,    spin: 0.35 },   // 2 the orbit, a little quicker
+    { pitch: 1.5*DEG, dist: 18,   spin: 0.2  },   // 3 down to edge-on: the thin bright line, the ring above and below
+    { pitch: 68*DEG, dist: 16,    spin: 0.2  },   // 4 up to top-down: the full rose ring
+    { pitch: 10*DEG, dist: START, spin: 0.2  },   // 5 back out wide, then round again
   ];
-  const SPIN_BASE = 0.012;                       // a slow turn that never quite stops between shots
+  const SPIN_BASE = 0.2;                         // the hole keeps turning, once round in about half a minute
   const cine = { speed: 0, hand: 0, t: 0, yaw: 0, pitch: 0 };   // yaw/pitch: how far the camera itself has moved the view
   let lastHand = -1e9;                           // when the visitor last steered
   const handOn = () => { lastHand = performance.now(); };
@@ -549,7 +549,7 @@ void main(){
     const f = frameAt(cam.yaw, cam.pitch, 0);
     pos = f.P; right = f.R; up = f.Up; fwd = f.F;
     // sky = base * camera^T: the stars are drawn as seen from a view that took the
-    // visitor's own moves in full but only a tenth of the cinematic camera's
+    // visitor's own moves in full but only a twentieth of the cinematic camera's
     const bp = Math.min(85*DEG, Math.max(-85*DEG, cam.pitch - (1 - STAR_DRIFT)*cine.pitch));
     const b = frameAt(cam.yaw - (1 - STAR_DRIFT)*cine.yaw, bp, 0), B = [b.R, b.Up, b.F], C = [f.R, f.Up, f.F];
     for (let col = 0; col < 3; col++) for (let row = 0; row < 3; row++)
