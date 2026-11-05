@@ -16,6 +16,7 @@ with Claude as pair programmer.
 | [The original sketch](https://w00l23.github.io/deep-field/solar-system/original/) | The first version of it: eight planets on circles, canvas 2D. | [`solar-system/original/`](solar-system/original/) |
 | [Wormhole](https://w00l23.github.io/deep-field/wormhole/) | A small ship leaves Earth, tears space open and comes out at Saturn. three.js from a CDN. | [`wormhole/`](wormhole/) |
 | [Rose Black Hole](https://w00l23.github.io/deep-field/black-hole/) | A black hole in deep space, wrapped in a rose and gold disk whose light bends over and under it. One HTML file, raw WebGL shader. | [`black-hole/`](black-hole/) |
+| [Binary Stars](https://w00l23.github.io/deep-field/binary-stars/) | Alpha Centauri, Sirius and Algol on their real orbits, with the light that reaches us as they eclipse. One HTML file, canvas 2D. | [`binary-stars/`](binary-stars/) |
 | Scale Zoom | From the width of an atom to the edge of the observable universe. Coming soon. | [`scale-zoom/`](scale-zoom/) |
 
 ## Run it locally
@@ -71,7 +72,8 @@ measurements and pictures:
 
 Each sim's folder has the full table in its `CREDITS.md`
 ([solar system](solar-system/CREDITS.md), [wormhole](wormhole/CREDITS.md),
-[black hole](black-hole/CREDITS.md)),
+[black hole](black-hole/CREDITS.md),
+[binary stars](binary-stars/CREDITS.md)),
 including how each map was reduced or changed. The pictures are public
 domain (NASA, USGS); Gaia and SIMBAD ask to be named.
 
