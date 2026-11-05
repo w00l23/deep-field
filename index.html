@@ -161,25 +161,6 @@
     padding:6px 10px;border-radius:999px;
     color:var(--dim);background:rgba(10,10,24,.6);border:1px solid var(--line);
   }
-  /* Scale Zoom has no picture yet: rings of scale, slowly falling inward */
-  .rings{position:absolute;inset:0;display:grid;place-items:center;
-    background:radial-gradient(circle at 50% 50%,rgba(90,80,170,.18),transparent 60%)}
-  .rings i{
-    position:absolute;width:20%;aspect-ratio:1;border-radius:50%;
-    border:1px solid rgba(200,196,240,.5);
-    animation:fall 9s linear infinite;opacity:0;
-  }
-  .rings i:nth-child(2){animation-delay:-1.8s}
-  .rings i:nth-child(3){animation-delay:-3.6s}
-  .rings i:nth-child(4){animation-delay:-5.4s}
-  .rings i:nth-child(5){animation-delay:-7.2s}
-  .rings b{width:5px;height:5px;border-radius:50%;background:#f1eefa;box-shadow:0 0 14px 3px rgba(190,180,255,.6)}
-  @keyframes fall{
-    0%{transform:scale(5.5);opacity:0}
-    25%{opacity:.5}
-    85%{opacity:.25}
-    100%{transform:scale(.15);opacity:0}
-  }
   .card.later{cursor:default}
   .card.later:hover,.card.later:active{transform:none;box-shadow:none;border-color:var(--line)}
 
@@ -214,11 +195,6 @@
   @media (prefers-reduced-motion:reduce){
     .rise{animation:none;opacity:1;transform:none}
     .haze::after{animation:none}
-    .rings i{animation:none;opacity:.35}
-    .rings i:nth-child(1){transform:scale(4)}
-    .rings i:nth-child(2){transform:scale(2.6)}
-    .rings i:nth-child(3){transform:scale(1.6)}
-    .rings i:nth-child(4){transform:scale(.9)}
     .card,.shot img{transition:none}
   }
 </style>
@@ -268,13 +244,10 @@
       </div>
     </li>
 
-    <li class="card later rise" style="animation-delay:.95s">
-      <div class="shot" aria-hidden="true">
-        <div class="rings"><i></i><i></i><i></i><i></i><i></i><b></b></div>
-      </div>
-      <span class="soon">Coming soon</span>
+    <li class="card rise" style="animation-delay:.95s">
+      <div class="shot"><img src="assets/previews/scale-zoom.webp" alt="The Milky Way seen from above, a spiral of gold and blue stars, with a small gold dot marking where we are" width="960" height="600" decoding="async" loading="lazy"></div>
       <div class="body">
-        <h2>Scale Zoom</h2>
+        <h2><a class="go" href="scale-zoom/">Scale Zoom</a></h2>
         <p>From the width of an atom to the edge of the observable universe.</p>
       </div>
     </li>

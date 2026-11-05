@@ -17,7 +17,7 @@ with Claude as pair programmer.
 | [Wormhole](https://w00l23.github.io/deep-field/wormhole/) | A small ship leaves Earth, tears space open and comes out at Saturn. three.js from a CDN. | [`wormhole/`](wormhole/) |
 | [Rose Black Hole](https://w00l23.github.io/deep-field/black-hole/) | A black hole in deep space, wrapped in a rose and gold disk whose light bends over and under it. One HTML file, raw WebGL shader. | [`black-hole/`](black-hole/) |
 | [Binary Stars](https://w00l23.github.io/deep-field/binary-stars/) | Alpha Centauri, Sirius and Algol on their real orbits, with the light that reaches us as they eclipse. One HTML file, canvas 2D. | [`binary-stars/`](binary-stars/) |
-| Scale Zoom | From the width of an atom to the edge of the observable universe. Coming soon. | [`scale-zoom/`](scale-zoom/) |
+| [Scale Zoom](https://w00l23.github.io/deep-field/scale-zoom/) | From the width of an atom to the edge of the observable universe, everything drawn at its true size. One HTML file, canvas 2D. | [`scale-zoom/`](scale-zoom/) |
 
 ## Run it locally
 
@@ -39,8 +39,8 @@ path on GitHub Pages (`/deep-field/`), and falls back to `/` on localhost.
   ([solar-system](https://github.com/w00l23/solar-system),
   [wormhole](https://github.com/w00l23/wormhole)). The only additions are a
   page title, a description and share tags in its `<head>`, and a small
-  "‹ Deep Field" link in the top-left corner back to the hub. The black hole
-  was made here, in this repo.
+  "‹ Deep Field" link in the top-left corner back to the hub. The black hole,
+  Binary Stars and Scale Zoom were made here, in this repo.
 - `assets/` holds the card previews, the share images and the icons;
   `404.html` is what GitHub Pages shows for any missing path.
 
