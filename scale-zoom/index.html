@@ -4,16 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Scale Zoom · Deep Field</title>
-<meta name="description" content="From the width of an atom to the edge of the observable universe. Coming soon to Deep Field.">
+<meta name="description" content="From the width of an atom to the edge of the observable universe, everything drawn at its true size. Scroll, pinch or let the tour carry you.">
 <meta property="og:site_name" content="Deep Field">
 <meta property="og:title" content="Scale Zoom · Deep Field">
-<meta property="og:description" content="From the width of an atom to the edge of the observable universe. Coming soon to Deep Field.">
+<meta property="og:description" content="From the width of an atom to the edge of the observable universe, everything drawn at its true size.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://w00l23.github.io/deep-field/scale-zoom/">
-<meta property="og:image" content="https://w00l23.github.io/deep-field/assets/og.jpg">
+<meta property="og:image" content="https://w00l23.github.io/deep-field/assets/og-scale-zoom.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="The Sun and its planets on their orbits, seen from above at an angle">
+<meta property="og:image:alt" content="The Milky Way seen from above, a spiral of gold and blue stars, with a small gold dot marking where we are">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="../assets/icons/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="../assets/icons/favicon.ico" sizes="32x32">
@@ -22,18 +22,703 @@
 <meta name="theme-color" content="#03030a">
 <meta name="color-scheme" content="dark">
 <style>
-  html,body{margin:0;height:100%;background:#03030a;color:#e7e4f2;font-family:Georgia,"Times New Roman",serif}
-  body{display:grid;place-items:center;text-align:center;
-    background:radial-gradient(55% 45% at 50% 50%,rgba(80,70,160,.16),transparent 70%),#03030a}
-  h1{margin:0;font-weight:normal;font-size:clamp(1.8rem,6vw,2.8rem);letter-spacing:.18em;text-indent:.18em;text-transform:uppercase}
-  p{margin:1rem 1.5rem 0;color:rgba(200,196,228,.62);font-style:italic;letter-spacing:.04em;line-height:1.7}
+  :root{
+    --ink:#ece8f4;
+    --dim:rgba(214,208,236,.74);
+    --soft:rgba(214,208,236,.56);
+    --gold:255,214,160;
+    --sat:env(safe-area-inset-top,0px);
+    --sab:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#03030a;color:var(--ink);overflow:hidden;
+    font-family:Georgia,"Times New Roman",serif;-webkit-font-smoothing:antialiased}
+  #view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;
+    opacity:0;transition:opacity 2.4s ease}
+  #view.ready{opacity:1}
+
+  /* arrival: the name and how to move, gone after the first touch */
+  #intro{position:fixed;z-index:3;left:0;right:0;top:calc(14px + var(--sat));text-align:center;pointer-events:none;
+    opacity:0;transition:opacity 2.4s ease .6s}
+  #intro.on{opacity:1}
+  #intro.off{opacity:0;transition:opacity 1.4s ease}
+  #intro h1{margin:0;font-weight:normal;font-size:.95rem;letter-spacing:.32em;text-indent:.32em;text-transform:uppercase;
+    color:rgba(240,236,250,.86);line-height:44px;text-shadow:0 0 16px #000}
+  #intro p{margin:.1rem auto 0;max-width:22rem;padding:0 1.5rem;font-size:.8rem;line-height:1.6;letter-spacing:.05em;
+    font-style:italic;color:var(--dim);text-shadow:0 0 12px #000}
+
+  /* the tour's pause, top right, as quiet as the way back */
+  #tour{position:fixed;z-index:4;top:calc(2px + var(--sat));right:calc(8px + env(safe-area-inset-right,0px));
+    padding:16px 12px;background:none;border:0;cursor:pointer;
+    font:12px/1 Georgia,"Times New Roman",serif;letter-spacing:.08em;color:rgba(222,218,242,.54);
+    text-shadow:0 0 10px rgba(0,0,0,.9);-webkit-tap-highlight-color:transparent;transition:color .3s ease}
+  #tour:hover,#tour:focus-visible{color:rgba(240,236,255,.92);outline:none}
+  #tour:focus-visible{outline:2px solid rgba(220,215,255,.8);outline-offset:-6px;border-radius:10px}
+
+  /* what you are looking at, and how wide the screen is right now */
+  #hud{position:fixed;z-index:3;left:0;right:0;bottom:0;padding:0 18px calc(14px + var(--sab));
+    text-align:center;pointer-events:none}
+  #label{min-height:6.2em;display:flex;flex-direction:column;justify-content:flex-end;transition:opacity .25s linear}
+  #label h2{margin:0;font-weight:normal;font-size:.74rem;letter-spacing:.28em;text-indent:.28em;text-transform:uppercase;
+    color:var(--soft);text-shadow:0 0 12px #000}
+  #size{margin:.45rem 0 0;font-size:clamp(1.05rem,3.4vw,1.3rem);letter-spacing:.04em;color:var(--ink);text-shadow:0 0 16px #000}
+  #fact{margin:.45rem auto 0;max-width:30rem;font-size:.84rem;line-height:1.55;font-style:italic;color:var(--dim);
+    text-shadow:0 0 12px #000;min-height:1.3em}
+  #across{margin:1.1rem 0 .1rem;font-size:.72rem;letter-spacing:.12em;color:var(--soft);font-variant-numeric:tabular-nums}
+  #track{position:relative;margin:0 auto;width:min(560px,100%);height:40px;pointer-events:auto;cursor:pointer;
+    touch-action:none;outline:none;-webkit-tap-highlight-color:transparent;border-radius:8px}
+  #track:focus-visible{outline:2px solid rgba(220,215,255,.8);outline-offset:2px}
+  #track::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(200,196,236,.2)}
+  #track span{position:absolute;top:50%;width:1px;height:7px;margin:-3px 0 0;background:rgba(214,208,240,.42)}
+  #mark{position:absolute;top:50%;width:7px;height:7px;margin:-3px 0 0 -3px;border-radius:50%;
+    background:rgb(var(--gold));box-shadow:0 0 10px 2px rgba(var(--gold),.55)}
+  #ends{display:flex;justify-content:space-between;margin:-6px auto 0;width:min(560px,100%);
+    font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:rgba(200,196,228,.42)}
+  @media (max-height:520px){#fact{display:none}#label{min-height:3.6em}}
 </style>
 </head>
 <body>
-<main>
+<canvas id="view" aria-label="A zoom through the sizes of things, from an atom to the observable universe"></canvas>
+
+<div id="intro">
   <h1>Scale Zoom</h1>
-  <p>From the width of an atom to the edge of the observable universe.<br>Coming soon.</p>
-</main>
+  <p>Everything here is drawn at its true size. Scroll, pinch or drag to travel, or let the tour carry you.</p>
+</div>
+
+<button id="tour" type="button" aria-pressed="true">pause</button>
+
+<div id="hud">
+  <div id="label"><h2 id="name"></h2><p id="size"></p><p id="fact"></p></div>
+  <div id="across"></div>
+  <div id="track" role="slider" tabindex="0" aria-label="Scale" aria-valuemin="0" aria-valuemax="18" aria-valuenow="6"><i id="mark"></i></div>
+  <div id="ends" aria-hidden="true"><span>atom</span><span>universe</span></div>
+</div>
+
+<script>
+/* Scale Zoom. One camera, one number: z, the log of how many metres the
+   screen's short side spans right now. Everything is placed in one world, in
+   metres, with you standing at the origin, and drawn at its true size for that z.
+   Bigger things sit around their own centres (the Earth's, the Sun's, the
+   galaxy's...), so as you zoom out the camera eases from one centre to the
+   next and the thing you came from slides a little aside. */
+(() => {
+  const cv = document.getElementById('view');
+  const c = cv.getContext('2d');
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---- units ---------------------------------------------------------------
+  const AU = 1.495978707e11, LY = 9.4607e15, R_E = 6.371e6;
+
+  // a soft, seeded random so the sky is the same each visit
+  const rng = s => () => ((s = (s + 0x6D2B79F5) >>> 0, s = Math.imul(s ^ s >>> 15, s | 1),
+    s ^= s + Math.imul(s ^ s >>> 7, s | 61), ((s ^ s >>> 14) >>> 0) / 4294967296));
+  const ss = (a, b, x) => x <= a ? 0 : x >= b ? 1 : ((x = (x - a) / (b - a)), x * x * (3 - 2 * x));
+  const norm = (x, y) => { const l = Math.hypot(x, y); return [x / l, y / l]; };
+  const add = (p, v, k = 1) => [p[0] + v[0] * k, p[1] + v[1] * k];
+
+  // ---- where the big things are (metres, you at 0,0, y pointing down) ---------
+  const dSun = norm(-0.94, 0.34);                  // from Earth towards the Sun
+  const C_EARTH = [-0.30 * R_E, 0.22 * R_E];        // we look down on Earth's night side
+  const C_SUN = add(C_EARTH, dSun, AU);
+  const dGal = norm(0.55, -0.83);
+  const C_GAL = add(C_SUN, dGal, 26000 * LY);       // the Milky Way's centre
+  const dAnd = norm(0.88, 0.47);
+  const C_AND = add(C_GAL, dAnd, 2.5e6 * LY);       // Andromeda
+  const C_LG = add(C_GAL, dAnd, 1.2e6 * LY);        // the Local Group's middle, roughly
+  const C_LAN = add(C_LG, norm(-0.62, -0.78), 250e6 * LY);   // Laniakea's heart, the Great Attractor
+
+  // camera: each step hands over from a centre to the next one out
+  const CHAIN = [
+    { v: C_EARTH },
+    { v: add(C_SUN, C_EARTH, -1) },
+    { v: add(C_GAL, C_SUN, -1) },
+    { v: add(C_LG, C_GAL, -1) },
+    { v: add(C_LAN, C_LG, -1) },
+    { v: [-C_LAN[0], -C_LAN[1]], L: 26.2 },        // the observable universe is centred on us
+  ];
+  for (const k of CHAIN) { k.D = Math.hypot(k.v[0], k.v[1]); if (k.L == null) k.L = Math.log10(k.D); }
+  function focus(z) {
+    let fx = 0, fy = 0;
+    for (const k of CHAIN) {
+      const u = z - k.L;
+      const s = Math.min(1, 0.3 * ss(-1.4, -0.4, u) * Math.pow(10, u));
+      fx += s * k.v[0]; fy += s * k.v[1];
+    }
+    return [fx, fy];
+  }
+
+  // ---- the stops: what the tour pauses on -----------------------------------------
+  const STOPS = [
+    { id: 'atom', z: -9.66, name: 'A hydrogen atom', size: '0.1 nanometres across', fact: 'Its nucleus is 60,000 times smaller still.' },
+    { id: 'dna', z: -8.22, name: 'DNA', size: '2 nanometres wide', fact: 'Unwound, the DNA in one of your cells would stretch about 2 metres.' },
+    { id: 'virus', z: -6.66, name: 'A flu virus', size: 'about 100 nanometres', fact: 'Too small for any light microscope to see.' },
+    { id: 'cell', z: -4.62, name: 'Red blood cells', size: 'about 7.5 micrometres', fact: 'You carry about 25 trillion of them.' },
+    { id: 'hair', z: -3.4, name: 'A human hair', size: 'about 0.07 millimetres thick', fact: 'Its surface is covered in tiny overlapping scales.' },
+    { id: 'snow', z: -2.26, name: 'A snowflake', size: 'about 3 millimetres', fact: 'All six arms grew in the same air, so they match.' },
+    { id: 'you', z: 0.5, name: 'You', size: 'about 1.7 metres', fact: 'The gold dot will keep your place all the way out.' },
+    { id: 'city', z: 4.7, name: 'A city at night', size: 'about 30 kilometres', fact: '' },
+    { id: 'earth', z: 7.38, name: 'Earth', size: '12,742 kilometres across', fact: 'Home to everyone you have ever met.' },
+    { id: 'moon', z: 9.15, name: 'The Moon’s orbit', size: '769,000 kilometres across', fact: 'Light crosses it in about two and a half seconds.' },
+    { id: 'orbit', z: 11.7, name: 'Earth’s orbit', size: '300 million kilometres across', fact: 'Sunlight takes 8 minutes and 20 seconds to reach us.' },
+    { id: 'planets', z: 13.06, name: 'The planets', size: 'out to Neptune, 9 billion kilometres across', fact: 'Voyager 2 took twelve years to get to Neptune.' },
+    { id: 'oort', z: 16.45, name: 'The Oort cloud', size: 'perhaps 3 light-years across', fact: 'A far shell of icy bodies that no one has seen directly.' },
+    { id: 'stars', z: 17.38, name: 'Our nearest stars', size: 'Alpha Centauri, 4.4 light-years away', fact: 'Its light set out about four years ago.' },
+    { id: 'hood', z: 19.3, name: 'Our neighbourhood', size: 'about 2,000 light-years across', fact: 'Most of the stars you can see at night are in here.' },
+    { id: 'galaxy', z: 21.15, name: 'The Milky Way', size: 'about 100,000 light-years across', fact: 'We sit about 26,000 light-years from its centre.' },
+    { id: 'group', z: 22.6, name: 'The Local Group', size: 'about 10 million light-years', fact: 'Andromeda is falling towards us at about 110 kilometres a second.' },
+    { id: 'lan', z: 24.95, name: 'Laniakea, our supercluster', size: 'about 520 million light-years', fact: 'Its name is Hawaiian for “immeasurable heaven”.' },
+    { id: 'all', z: 27.17, name: 'The observable universe', size: '93 billion light-years across', fact: 'You are at its centre, and so is everyone else.' },
+  ];
+  const Z_MIN = -10.1, Z_MAX = 27.5, YOU = 6;
+
+  // ---- things to draw -------------------------------------------------------------
+  // each: pos (metres), size (metres across), r = size / screen, fades in and out by r
+  // (or by z, for things that are a cloud rather than one object)
+  const R = rng(20261105);
+  const gauss = () => { let u = 0; for (let i = 0; i < 6; i++) u += R(); return (u - 3) / 1.4; };
+
+  // the electron's cloud, sampled from the real 1s distribution r^2 e^(-2r)
+  const atomPts = Array.from({ length: 700 }, () => {
+    const r = -0.5 * (Math.log(R()) + Math.log(R()) + Math.log(R())), a = R() * 6.283;
+    return [Math.cos(a) * r * 0.5, Math.sin(a) * r * 0.5, R() * 6.283];
+  });
+  const cityPts = [];
+  for (let i = 0; i < 1100; i++) { const r = Math.abs(gauss()) * 0.17, a = R() * 6.283; cityPts.push([Math.cos(a) * r, Math.sin(a) * r * 0.8, R()]); }
+  for (let k = 0; k < 9; k++) {                    // roads: lights strung out along lines
+    const a = R() * 3.14, ox = gauss() * 0.06, oy = gauss() * 0.06;
+    for (let i = 0; i < 70; i++) { const t = (R() - 0.5) * (0.5 + R() * 0.6); cityPts.push([ox + Math.cos(a) * t, oy + Math.sin(a) * t, R() * 0.6]); }
+  }
+  const planets = [ // AU, colour, radius in km
+    [0.387, '200,190,180', 2440], [0.723, '240,220,180', 6052], [1, '120,170,255', 6371], [1.524, '230,130,90', 3390],
+    [5.203, '230,200,160', 69911], [9.537, '235,215,165', 58232], [19.19, '170,225,235', 25362], [30.07, '120,150,250', 24622]];
+  const earthAng = Math.atan2(C_EARTH[1] - C_SUN[1], C_EARTH[0] - C_SUN[0]);
+  const planetAng = planets.map((p, i) => i === 2 ? earthAng : R() * 6.283);
+  const kuiper = Array.from({ length: 500 }, () => { const r = (39 + gauss() * 4) * AU, a = R() * 6.283; return [Math.cos(a) * r, Math.sin(a) * r]; });
+  const oortPts = Array.from({ length: 1100 }, () => { const r = Math.pow(10, 15.1 + R() * 1.1), a = R() * 6.283; return [Math.cos(a) * r, Math.sin(a) * r * 0.92, R()]; });
+  const NEAR = [ // name, light-years, colour, show name
+    ['Alpha Centauri', 4.37, '255,236,200', 1], ['Barnard’s Star', 5.96, '255,170,130', 1], ['Wolf 359', 7.86, '255,150,120', 0],
+    ['Lalande 21185', 8.31, '255,170,140', 0], ['Sirius', 8.6, '210,225,255', 1], ['Luyten 726-8', 8.79, '255,150,120', 0],
+    ['Ross 154', 9.7, '255,160,130', 0], ['Epsilon Eridani', 10.5, '255,210,170', 1], ['Procyon', 11.46, '240,240,255', 1],
+    ['61 Cygni', 11.4, '255,190,150', 0], ['Tau Ceti', 11.9, '255,225,190', 1], ['Epsilon Indi', 11.87, '255,200,150', 0]]
+    .map(([n, d, col, show]) => { const a = R() * 6.283; return { n, x: Math.cos(a) * d * LY, y: Math.sin(a) * d * LY, col, show }; });
+  const field = Array.from({ length: 1500 }, () => {      // as many stars on screen at any zoom: spread evenly in log distance
+    const r = Math.pow(10, 16.9 + R() * 3.6), a = R() * 6.283, w = R();
+    return [Math.cos(a) * r, Math.sin(a) * r, w, w < 0.12 ? '190,210,255' : w > 0.85 ? '255,200,150' : '255,245,230'];
+  });
+
+  // a spiral galaxy as points, in units of its radius
+  function galaxy(seed, n, arms, wind) {
+    const g = rng(seed), gs = () => { let u = 0; for (let i = 0; i < 6; i++) u += g(); return (u - 3) / 1.4; };
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      let x, y, col;
+      if (g() < 0.2) {                              // the bulge
+        const r = Math.abs(gs()) * 0.09, a = g() * 6.283; x = Math.cos(a) * r; y = Math.sin(a) * r * 0.8; col = 0;
+      } else {
+        const t = Math.pow(g(), 0.7), r = 0.08 + 0.92 * t;
+        const a = (Math.floor(g() * arms) / arms) * 6.283 + Math.log(r / 0.08) * wind + gs() * (0.18 + 0.1 * t);
+        const j = gs() * 0.025;
+        x = Math.cos(a) * r + j; y = Math.sin(a) * r + j; col = g() < 0.12 ? 3 : t < 0.35 ? 1 : 2;
+      }
+      pts.push(x, y, col, g());
+    }
+    return pts;
+  }
+  const GCOL = ['255,220,170', '255,236,205', '200,215,255', '255,160,190'];
+  const mw = galaxy(7, 8000, 4, 2.1), and = galaxy(31, 4200, 2, 2.6), tri = galaxy(33, 1200, 2, 1.6);
+
+  // the cosmic web: knots joined to their nearest neighbours
+  function web(seed, n, centre) {
+    const g = rng(seed), pts = [];
+    for (let i = 0; i < n; i++) {
+      const r = (centre ? Math.pow(g(), 0.8) : Math.sqrt(g())), a = g() * 6.283;
+      pts.push([Math.cos(a) * r, Math.sin(a) * r, g()]);
+    }
+    const edges = [];
+    for (let i = 0; i < n; i++) {
+      const d = [];
+      for (let j = 0; j < n; j++) if (j !== i) d.push([(pts[i][0] - pts[j][0]) ** 2 + (pts[i][1] - pts[j][1]) ** 2, j]);
+      d.sort((a, b) => a[0] - b[0]);
+      for (let k = 0; k < 3; k++) if (d[k][1] > i || k === 0) edges.push(i, d[k][1]);
+    }
+    return { pts, edges };
+  }
+  const lan = web(55, 420, true), cosmos = web(77, 1700, false);
+  const cmb = Array.from({ length: 900 }, () => { const a = R() * 6.283; return [a, R(), R()]; });
+
+  // ---- drawing helpers ---------------------------------------------------------------
+  let W = 0, H = 0, S = 0, CY = 0, dpr = 1, t = 0, tw = 0;   // t: the clock; tw: the shimmer's clock, still for reduced motion
+  function glow(x, y, r, col, a) {
+    const g = c.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(${col},${a})`); g.addColorStop(0.3, `rgba(${col},${a * 0.4})`); g.addColorStop(1, `rgba(${col},0)`);
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, r, 0, 6.283); c.fill();
+  }
+  const onScreen = (x, y, r) => x + r > 0 && x - r < W && y + r > 0 && y - r < H;
+
+  const THINGS = [
+    { pos: [0, 0], size: 1.06e-10, fin: [0.02, 0.12], fout: [2, 5], draw(x, y, d, a) {
+      const r = d / 2;
+      const g = c.createRadialGradient(x, y, 0, x, y, r * 2.6);
+      g.addColorStop(0, `rgba(190,180,255,${0.5 * a})`); g.addColorStop(0.25, `rgba(150,140,240,${0.26 * a})`);
+      g.addColorStop(0.6, `rgba(110,100,220,${0.07 * a})`); g.addColorStop(1, 'rgba(90,80,200,0)');
+      c.fillStyle = g; c.beginPath(); c.arc(x, y, r * 2.6, 0, 6.283); c.fill();
+      c.fillStyle = 'rgb(225,220,255)';
+      for (const p of atomPts) {
+        c.globalAlpha = a * (0.25 + 0.3 * Math.sin(tw * 1.7 + p[2] * 9) ** 2);
+        c.fillRect(x + p[0] * d - 0.7, y + p[1] * d - 0.7, 1.4, 1.4);
+      }
+      c.globalAlpha = 1; glow(x, y, Math.max(4, d * 0.04), '255,240,220', a);
+    } },
+    { pos: [0, 0], size: 2e-9, fin: [0.03, 0.12], fout: [2.5, 6], draw(x, y, d, a) {
+      const ang = -0.38, ux = Math.cos(ang), uy = Math.sin(ang), P = d * 1.7, L = Math.min(d * 45, Math.hypot(W, H));
+      const ph = tw * 0.35, n = Math.min(1600, Math.max(60, L / 2.5));
+      c.lineCap = 'round';
+      for (const [s, col] of [[0, '255,170,200'], [Math.PI * 0.8, '190,180,255']]) {
+        c.strokeStyle = `rgba(${col},${0.85 * a})`; c.lineWidth = Math.max(1, d * 0.12);
+        c.beginPath();
+        for (let i = 0; i <= n; i++) {
+          const u = -L + (2 * L * i) / n, w = Math.sin((u / P) * 6.283 + s + ph) * d / 2;
+          const px = x + u * ux - w * uy, py = y + u * uy + w * ux;
+          i ? c.lineTo(px, py) : c.moveTo(px, py);
+        }
+        c.stroke();
+      }
+      c.lineWidth = Math.max(0.7, d * 0.05);
+      const step = P / 10;
+      for (let u = -L + ((L % step) || 0); u < L; u += step) {
+        const k = (u / P) * 6.283 + ph, w1 = Math.sin(k) * d / 2, w2 = Math.sin(k + Math.PI * 0.8) * d / 2;
+        const bx = x + u * ux, by = y + u * uy;
+        c.strokeStyle = `rgba(230,220,255,${0.35 * a * (1 - Math.abs(u) / L)})`;
+        c.beginPath(); c.moveTo(bx - w1 * uy, by + w1 * ux); c.lineTo(bx - w2 * uy, by + w2 * ux); c.stroke();
+      }
+    } },
+    { pos: [0, 0], size: 1.2e-7, fin: [0.01, 0.06], fout: [1.4, 3], draw(x, y, d, a) {
+      const r0 = d * 0.38, rot = tw * 0.04;
+      const g = c.createRadialGradient(x - r0 * 0.3, y - r0 * 0.3, r0 * 0.1, x, y, r0);
+      g.addColorStop(0, `rgba(150,220,215,${0.55 * a})`); g.addColorStop(1, `rgba(60,110,140,${0.75 * a})`);
+      c.fillStyle = g; c.beginPath(); c.arc(x, y, r0, 0, 6.283); c.fill();
+      c.strokeStyle = `rgba(200,245,240,${0.6 * a})`; c.lineWidth = Math.max(1, d * 0.012); c.stroke();
+      c.lineWidth = Math.max(0.8, d * 0.01);
+      for (let i = 0; i < 30; i++) {
+        const q = rot + (i / 30) * 6.283, cx = Math.cos(q), sy = Math.sin(q);
+        c.beginPath(); c.moveTo(x + cx * r0, y + sy * r0); c.lineTo(x + cx * d * 0.48, y + sy * d * 0.48); c.stroke();
+        c.fillStyle = `rgba(${i % 4 ? '200,245,240' : '255,190,210'},${0.8 * a})`;
+        c.beginPath(); c.arc(x + cx * d * 0.49, y + sy * d * 0.49, Math.max(0.8, d * 0.022), 0, 6.283); c.fill();
+      }
+    } },
+    { pos: [0, 0], size: 7.5e-6, fin: [0.01, 0.06], fout: [1.6, 3.5], draw(x, y, d, a) {
+      const CELLS = [[0, 0, 1, 0.9, 0.2], [1.12, -0.52, 0.96, 0.82, 1.2], [-1.08, 0.58, 1.04, 0.88, 2.1], [0.32, 1.12, 0.94, 0.86, 0.6], [-0.66, -1.04, 1, 0.8, 2.8], [1.5, 0.75, 0.9, 0.85, 1.7]];
+      for (const [ox, oy, k, sq, rr] of CELLS) {
+        const cx = x + ox * d, cy = y + oy * d, r = d * 0.5 * k;
+        if (!onScreen(cx, cy, r)) continue;
+        c.save(); c.translate(cx, cy); c.rotate(rr + tw * 0.02); c.scale(1, sq);
+        const g = c.createRadialGradient(0, 0, 0, 0, 0, r);
+        g.addColorStop(0, `rgba(150,40,62,${0.55 * a})`); g.addColorStop(0.45, `rgba(175,52,72,${0.7 * a})`);
+        g.addColorStop(0.8, `rgba(222,92,104,${0.95 * a})`); g.addColorStop(0.95, `rgba(170,46,66,${0.9 * a})`); g.addColorStop(1, 'rgba(120,20,40,0)');
+        c.fillStyle = g; c.beginPath(); c.arc(0, 0, r, 0, 6.283); c.fill(); c.restore();
+      }
+    } },
+    { pos: [0, 0], size: 7e-5, fin: [0.01, 0.06], fout: [1.2, 2.4], draw(x, y, d, a) {
+      const ang = 0.52, ux = Math.cos(ang), uy = Math.sin(ang), L = Math.min(d * 60, Math.hypot(W, H)), h = d / 2;
+      c.save(); c.translate(x, y); c.rotate(ang);
+      const g = c.createLinearGradient(0, -h, 0, h);
+      g.addColorStop(0, `rgba(70,40,25,${0.9 * a})`); g.addColorStop(0.45, `rgba(150,105,70,${0.95 * a})`); g.addColorStop(1, `rgba(55,32,20,${0.9 * a})`);
+      c.fillStyle = g; c.fillRect(-L, -h, 2 * L, d);
+      c.strokeStyle = `rgba(230,200,170,${0.22 * a})`; c.lineWidth = Math.max(0.6, d * 0.012);
+      const step = Math.max(4, d * 0.32);
+      for (let u = -L; u < L; u += step) { c.beginPath(); c.moveTo(u, -h); c.quadraticCurveTo(u + step * 0.9, 0, u, h); c.stroke(); }
+      c.restore();
+    } },
+    { pos: [0, 0], size: 3e-3, fin: [0.01, 0.05], fout: [1.6, 3.5], draw(x, y, d, a) {
+      c.save(); c.translate(x, y); c.rotate(tw * 0.03);
+      c.strokeStyle = `rgba(215,232,255,${0.9 * a})`; c.lineCap = 'round';
+      c.shadowColor = `rgba(160,200,255,${0.7 * a})`; c.shadowBlur = Math.min(14, d * 0.03);
+      const R0 = d / 2;
+      for (let k = 0; k < 6; k++) {
+        c.rotate(Math.PI / 3);
+        c.lineWidth = Math.max(1, d * 0.014);
+        c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -R0); c.stroke();
+        c.lineWidth = Math.max(0.8, d * 0.009);
+        for (const [p, l] of [[0.3, 0.16], [0.52, 0.2], [0.72, 0.15], [0.88, 0.08]]) {
+          for (const sgn of [-1, 1]) {
+            c.beginPath(); c.moveTo(0, -R0 * p); c.lineTo(sgn * R0 * l * 0.866, -R0 * (p + l * 0.5)); c.stroke();
+          }
+        }
+      }
+      c.lineWidth = Math.max(0.8, d * 0.008);
+      c.beginPath(); for (let k = 0; k <= 6; k++) { const q = k * Math.PI / 3; c.lineTo(Math.sin(q) * R0 * 0.16, -Math.cos(q) * R0 * 0.16); } c.stroke();
+      c.restore();
+    } },
+    { pos: [0, 0], size: 1.7, fin: [0.0012, 0.008], fout: [1.6, 3.5], draw(x, y, d, a) {
+      // a person, standing: head, body, arms a little out
+      if (d < 3) { glow(x, y, 4, '230,225,255', a); return; }
+      c.save(); c.translate(x, y); c.lineCap = 'round'; c.lineJoin = 'round';
+      c.shadowColor = `rgba(170,160,255,${0.6 * a})`; c.shadowBlur = Math.min(18, d * 0.05);
+      c.strokeStyle = c.fillStyle = `rgba(232,226,250,${0.92 * a})`;
+      c.beginPath(); c.arc(0, -d * 0.43, d * 0.068, 0, 6.283); c.fill();
+      c.lineWidth = d * 0.13; c.beginPath(); c.moveTo(0, -d * 0.3); c.lineTo(0, -d * 0.02); c.stroke();
+      c.lineWidth = d * 0.065;
+      c.beginPath(); c.moveTo(-d * 0.045, -d * 0.02); c.lineTo(-d * 0.08, d * 0.47); c.stroke();
+      c.beginPath(); c.moveTo(d * 0.045, -d * 0.02); c.lineTo(d * 0.08, d * 0.47); c.stroke();
+      c.lineWidth = d * 0.05;
+      c.beginPath(); c.moveTo(-d * 0.07, -d * 0.31); c.lineTo(-d * 0.15, -d * 0.03); c.stroke();
+      c.beginPath(); c.moveTo(d * 0.07, -d * 0.31); c.lineTo(d * 0.17, -d * 0.04); c.stroke();
+      c.restore();
+    } },
+    { pos: [0, 0], size: 3e4, fin: [0.004, 0.03], fout: [8, 30], draw(x, y, d, a) {
+      c.globalCompositeOperation = 'lighter';
+      for (const p of cityPts) {
+        const px = x + p[0] * d, py = y + p[1] * d;
+        if (px < -2 || px > W + 2 || py < -2 || py > H + 2) continue;
+        const s = d > 4000 ? 2.4 : 1.4;
+        c.fillStyle = `rgba(255,${190 + p[2] * 50 | 0},${120 + p[2] * 60 | 0},${a * (0.35 + 0.5 * p[2])})`;
+        c.fillRect(px - s / 2, py - s / 2, s, s);
+      }
+      if (d < S * 2) glow(x, y, Math.max(6, d * 0.35), '255,190,120', 0.22 * a * (1 - ss(0.4, 2, d / S)));
+      c.globalCompositeOperation = 'source-over';
+    } },
+    { pos: C_EARTH, size: 2 * R_E, fin: [0.003, 0.02], fout: [25, 80], draw(x, y, d, a) {
+      const r = d / 2, lx = x + dSun[0] * r * 0.55, ly = y + dSun[1] * r * 0.55;
+      if (r > 3) {
+        const at = c.createRadialGradient(x, y, r * 0.96, x, y, r * 1.1);
+        at.addColorStop(0, `rgba(120,170,255,${0.45 * a})`); at.addColorStop(1, 'rgba(120,170,255,0)');
+        c.fillStyle = at; c.beginPath(); c.arc(x, y, r * 1.1, 0, 6.283); c.fill();
+      }
+      const g = c.createRadialGradient(lx, ly, r * 0.05, x, y, r);
+      g.addColorStop(0, `rgba(120,170,235,${a})`); g.addColorStop(0.45, `rgba(40,90,170,${a})`);
+      g.addColorStop(0.75, `rgba(12,30,70,${a})`); g.addColorStop(1, `rgba(5,10,26,${a})`);
+      c.fillStyle = g; c.beginPath(); c.arc(x, y, Math.max(r, 1.2), 0, 6.283); c.fill();
+    } },
+    { pos: C_EARTH, size: 2 * 3.844e8, fin: [0.02, 0.1], fout: [4, 10], draw(x, y, d, a) {
+      c.strokeStyle = `rgba(200,200,240,${0.28 * a})`; c.lineWidth = 1;
+      c.beginPath(); c.arc(x, y, d / 2, 0, 6.283); c.stroke();
+      const q = -2.1, mx = x + Math.cos(q) * d / 2, my = y + Math.sin(q) * d / 2, mr = Math.max(1.6, d * 0.0045 / 2);
+      const g = c.createRadialGradient(mx + dSun[0] * mr * 0.5, my + dSun[1] * mr * 0.5, 0, mx, my, mr);
+      g.addColorStop(0, `rgba(235,232,225,${a})`); g.addColorStop(1, `rgba(60,58,64,${a})`);
+      c.fillStyle = g; c.beginPath(); c.arc(mx, my, mr, 0, 6.283); c.fill();
+    } },
+    { pos: C_SUN, size: 1.392e9, az: [8.6, 9.8, 18, 19.2], draw(x, y, d, a) {
+      const r = Math.max(2, d / 2);
+      glow(x, y, Math.max(r * 4, 22), '255,200,130', 0.35 * a);
+      const g = c.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, `rgba(255,252,235,${a})`); g.addColorStop(0.8, `rgba(255,220,150,${a})`); g.addColorStop(1, `rgba(255,170,90,${a})`);
+      c.fillStyle = g; c.beginPath(); c.arc(x, y, r, 0, 6.283); c.fill();
+    } },
+    { pos: C_SUN, size: 2 * 30.07 * AU, az: [9.9, 10.9, 15.6, 16.6], draw(x, y, d, a, ppm) {
+      c.lineWidth = 1;
+      planets.forEach(([au, col, km], i) => {
+        const r = au * AU * ppm, o = a * ss(0.004, 0.03, 2 * r / S) * (1 - ss(3, 8, 2 * r / S));
+        if (o < 0.005) return;
+        c.strokeStyle = `rgba(${i === 2 ? '150,190,255' : '200,196,236'},${(i === 2 ? 0.42 : 0.22) * o})`;
+        c.beginPath(); c.arc(x, y, r, 0, 6.283); c.stroke();
+        if (i === 2) return;                        // Earth is drawn as itself
+        const px = x + Math.cos(planetAng[i]) * r, py = y + Math.sin(planetAng[i]) * r;
+        c.fillStyle = `rgba(${col},${o})`; c.beginPath(); c.arc(px, py, Math.max(1.5, km * 1e3 * ppm), 0, 6.283); c.fill();
+      });
+      const ka = a * ss(0.02, 0.08, 80 * AU * ppm / S);
+      if (ka > 0.005) {
+        c.fillStyle = `rgba(200,210,240,${0.4 * ka})`;
+        for (const p of kuiper) c.fillRect(x + p[0] * ppm - 0.5, y + p[1] * ppm - 0.5, 1, 1);
+      }
+    } },
+    { pos: C_SUN, size: 3e16, az: [14.5, 15.5, 17.2, 18.1], draw(x, y, d, a, ppm) {
+      c.fillStyle = 'rgb(205,220,255)';
+      for (const p of oortPts) {
+        const px = x + p[0] * ppm, py = y + p[1] * ppm;
+        if (px < 0 || px > W || py < 0 || py > H) continue;
+        c.globalAlpha = a * (0.15 + 0.3 * p[2]); c.fillRect(px - 0.6, py - 0.6, 1.2, 1.2);
+      }
+      c.globalAlpha = 1;
+    } },
+    { pos: C_SUN, size: 2.4e17, az: [16.1, 16.9, 18.7, 19.6], draw(x, y, d, a, ppm, z) {
+      const lab = a * (1 - ss(17.9, 18.5, z)) * ss(16.7, 17.1, z);
+      c.font = 'italic 11px Georgia, serif'; c.textBaseline = 'middle';
+      for (const s of NEAR) {
+        const px = x + s.x * ppm, py = y + s.y * ppm;
+        if (!onScreen(px, py, 10)) continue;
+        glow(px, py, 9, s.col, 0.5 * a);
+        c.fillStyle = `rgba(${s.col},${a})`; c.beginPath(); c.arc(px, py, 1.6, 0, 6.283); c.fill();
+        if (s.show && lab > 0.01) { c.fillStyle = `rgba(214,208,236,${0.6 * lab})`; c.fillText(s.n, px + 8, py); }
+      }
+    } },
+    { pos: C_SUN, size: 1e19, az: [16.9, 17.9, 20.4, 21.3], draw(x, y, d, a, ppm) {
+      for (const p of field) {
+        const px = x + p[0] * ppm, py = y + p[1] * ppm;
+        if (px < 0 || px > W || py < 0 || py > H) continue;
+        c.fillStyle = `rgba(${p[3]},${a * (0.25 + 0.55 * p[2])})`;
+        const s = 0.8 + p[2] * 1.1; c.fillRect(px - s / 2, py - s / 2, s, s);
+      }
+    } },
+    ...[
+      [C_GAL, 1e21, mw, 1, 0.3, 1.0, 'Milky Way'],
+      [C_AND, 2.2e21, and, 0.34, -0.7, 1.15, 'Andromeda'],
+      [add(C_AND, norm(-0.2, 1), 7.3e21), 6e20, tri, 0.7, 1.2, 0.7, 'Triangulum'],
+    ].map(([pos, size, pts, tilt, rot, bright, label]) => ({ pos, size, fin: [0.004, 0.025], fout: [2.6, 7], draw(x, y, d, a) {
+      const R0 = d / 2, cr = Math.cos(rot), sr = Math.sin(rot);
+      c.globalCompositeOperation = 'lighter';
+      glow(x, y, Math.max(9, R0 * 0.8), '255,220,180', 0.75 * a * bright * (1 - 0.6 * ss(30, 120, d)));
+      if (d > 14) {
+        const pa = a * ss(14, 60, d), sz = d > 500 ? 1.8 : 1.2;
+        for (let i = 0; i < pts.length; i += 4) {
+          const gx = pts[i], gy = pts[i + 1] * tilt;
+          const px = x + (gx * cr - gy * sr) * R0, py = y + (gx * sr + gy * cr) * R0;
+          if (px < -2 || px > W + 2 || py < -2 || py > H + 2) continue;
+          c.fillStyle = `rgba(${GCOL[pts[i + 2]]},${pa * (0.18 + 0.5 * pts[i + 3]) * bright})`;
+          c.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+        }
+      }
+      c.globalCompositeOperation = 'source-over';
+      const la = a * ss(6, 14, d) * (1 - ss(120, 220, d));     // a name while it is small
+      if (la > 0.01) {
+        c.font = 'italic 11px Georgia, serif'; c.textBaseline = 'middle';
+        c.fillStyle = `rgba(214,208,236,${0.6 * la})`; c.fillText(label, x + Math.max(10, R0 * 0.9) + 4, y);
+      }
+    } })),
+    ...[[add(C_SUN, norm(-0.5, 0.86), 1.6e5 * LY), 1.3e20], [add(C_SUN, norm(-0.75, 0.66), 2e5 * LY), 6.5e19]]
+      .map(([pos, size]) => ({ pos, size, fin: [0.003, 0.02], fout: [2, 5], draw(x, y, d, a) {
+        glow(x, y, Math.max(4, d * 0.7), '220,215,255', 0.4 * a);
+      } })),
+    ...[[C_LAN, 5e24, lan, true, [22.5, 23.5, 25.8, 26.6]], [[0, 0], 8.8e26, cosmos, false, [24.4, 25.4, 99, 99]]]
+      .map(([pos, size, w, ours, az]) => ({ pos, size, az, draw(x, y, d, a) {
+        const R0 = d / 2;
+        c.globalCompositeOperation = 'lighter';
+        c.lineWidth = 1;
+        for (const inner of (ours ? [false, true] : [false])) {
+          c.strokeStyle = inner ? `rgba(255,190,170,${0.3 * a})` : `rgba(160,170,255,${0.16 * a})`;
+          c.beginPath();
+          for (let i = 0; i < w.edges.length; i += 2) {
+            const p = w.pts[w.edges[i]], q = w.pts[w.edges[i + 1]];
+            if (ours && (Math.hypot(p[0], p[1]) < 0.5) !== inner) continue;
+            const ax = x + p[0] * R0, ay = y + p[1] * R0, bx = x + q[0] * R0, by = y + q[1] * R0;
+            if (Math.max(ax, bx) < 0 || Math.min(ax, bx) > W || Math.max(ay, by) < 0 || Math.min(ay, by) > H) continue;
+            c.moveTo(ax, ay); c.lineTo(bx, by);
+          }
+          c.stroke();
+        }
+        for (const p of w.pts) {
+          const px = x + p[0] * R0, py = y + p[1] * R0;
+          if (px < 0 || px > W || py < 0 || py > H) continue;
+          const warm = ours && Math.hypot(p[0], p[1]) < 0.5;
+          c.fillStyle = warm ? `rgba(255,205,180,${a * (0.4 + 0.5 * p[2])})` : `rgba(200,205,255,${a * (0.25 + 0.45 * p[2])})`;
+          const s = 1 + p[2] * 1.4; c.fillRect(px - s / 2, py - s / 2, s, s);
+        }
+        c.globalCompositeOperation = 'source-over';
+      } })),
+    { pos: [0, 0], size: 8.8e26, az: [25.6, 26.5, 99, 99], draw(x, y, d, a) {
+      // the edge: the oldest light there is, the cosmic microwave background
+      const R0 = d / 2;
+      c.globalCompositeOperation = 'lighter';
+      const g = c.createRadialGradient(x, y, R0 * 0.9, x, y, R0 * 1.04);
+      g.addColorStop(0, 'rgba(255,150,110,0)'); g.addColorStop(0.75, `rgba(255,160,120,${0.22 * a})`); g.addColorStop(1, 'rgba(255,150,110,0)');
+      c.fillStyle = g; c.beginPath(); c.arc(x, y, R0 * 1.04, 0, 6.283); c.fill();
+      for (const [q, k, w] of cmb) {
+        const rr = R0 * (0.985 + k * 0.04), px = x + Math.cos(q) * rr, py = y + Math.sin(q) * rr;
+        c.fillStyle = w > 0.5 ? `rgba(255,170,110,${0.35 * a * w})` : `rgba(130,170,255,${0.4 * a * (1 - w)})`;
+        c.beginPath(); c.arc(px, py, 1 + w * 2.4, 0, 6.283); c.fill();
+      }
+      c.globalCompositeOperation = 'source-over';
+    } },
+  ];
+
+  // ---- the faint drifting dust that makes the zoom feel like travel -------------------
+  const DUST = Array.from({ length: 3 }, () => Array.from({ length: 70 }, () => [R() * 2 - 1, R() * 2 - 1, R()]));
+
+  // ---- the camera ------------------------------------------------------------------
+  let z = STOPS[YOU].z, zT = z;
+  let glide = null, dwell = 0, dir = 1, idx = YOU, touring = !still, userAt = -1e9, paused = false;
+  const fromQuery = new URLSearchParams(location.search).get('at');
+  if (fromQuery) { const i = STOPS.findIndex(s => s.id === fromQuery); if (i >= 0) { idx = i; z = zT = STOPS[i].z; } }
+
+  function glideTo(i, quick) {
+    idx = i;
+    const dz = Math.abs(STOPS[i].z - z);
+    if (still) { z = zT = STOPS[i].z; glide = null; dwell = 7; return; }
+    glide = { z0: z, z1: STOPS[i].z, t: 0, dur: quick ? Math.min(4, 0.6 + dz * 0.35) : 1.4 + dz * 2.1 };
+  }
+  function nearest(zz) { let b = 0; STOPS.forEach((s, i) => { if (Math.abs(s.z - zz) < Math.abs(STOPS[b].z - zz)) b = i; }); return b; }
+  function touched() { userAt = t; glide = null; dwell = 0; intro(false); }
+
+  function step(dt) {
+    if (glide) {
+      glide.t += dt;
+      const k = Math.min(1, glide.t / glide.dur), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+      z = zT = glide.z0 + (glide.z1 - glide.z0) * e;
+      if (k >= 1) { glide = null; dwell = 4.5; }
+    } else if (touring && !paused && t - userAt > 10) {
+      if (dwell > 0) dwell -= dt;
+      else {
+        if (t - userAt < 10 + dt * 2) idx = nearest(z);   // picking up again after a touch
+        let n = idx + dir;
+        if (n < 0 || n >= STOPS.length) { dir = -dir; n = idx + dir; }
+        glideTo(n);
+      }
+    } else {
+      z += (zT - z) * (1 - Math.exp(-dt * 7));
+    }
+    z = Math.max(Z_MIN, Math.min(Z_MAX, z)); zT = Math.max(Z_MIN, Math.min(Z_MAX, zT));
+  }
+
+  // ---- frame ------------------------------------------------------------------------
+  function bg(zz) {
+    // a faint indigo among the very small, near black among the stars
+    const m = ss(-6, 0, zz), s = ss(4, 9, zz);
+    const r = 9 - 4 * m - 3 * s, g = 8 - 3 * m - 3 * s, b = 24 - 10 * m - 6 * s;
+    return `rgb(${r | 0},${g | 0},${b | 0})`;
+  }
+  function frame() {
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.fillStyle = bg(z); c.fillRect(0, 0, W, H);
+    const view = Math.pow(10, z), ppm = S / view, [fx, fy] = focus(z);
+
+    // dust
+    const M = Math.max(W, H) * 0.7, dustCol = z < -1 ? '190,200,255' : '230,230,255';
+    c.fillStyle = `rgb(${dustCol})`;
+    DUST.forEach((layer, i) => {
+      const p = (((i / 3 + z * 0.33) % 1) + 1) % 1, m = 0.3 * Math.pow(10, 1 - p), o = Math.sin(Math.PI * p) * 0.22;
+      for (const q of layer) {
+        c.globalAlpha = o * (0.4 + 0.6 * q[2]);
+        c.fillRect(W / 2 + q[0] * M * m, CY + q[1] * M * m, 1.2, 1.2);
+      }
+    });
+    c.globalAlpha = 1;
+
+    for (const o of THINGS) {
+      const d = o.size * ppm, r = d / S;
+      const a = o.az ? ss(o.az[0], o.az[1], z) * (1 - ss(o.az[2], o.az[3], z))
+                     : ss(o.fin[0], o.fin[1], r) * (1 - ss(o.fout[0], o.fout[1], r));
+      if (a < 0.004) continue;
+      const x = W / 2 + (o.pos[0] - fx) * ppm, y = CY + (o.pos[1] - fy) * ppm;
+      if (!o.az && !onScreen(x, y, d * 2)) continue;
+      o.draw(x, y, d, a, ppm, z);
+    }
+
+    // you are here: a small gold light that keeps your place
+    const ya = ss(4.4, 5.4, z);
+    if (ya > 0.004) {
+      const x = W / 2 - fx * ppm, y = CY - fy * ppm;
+      glow(x, y, 12, '255,214,160', 0.55 * ya);
+      c.fillStyle = `rgba(255,226,180,${ya})`; c.beginPath(); c.arc(x, y, 2, 0, 6.283); c.fill();
+      if (!still) {
+        const k = (tw * 0.35) % 1;
+        c.strokeStyle = `rgba(255,214,160,${0.35 * ya * (1 - k)})`; c.lineWidth = 1;
+        c.beginPath(); c.arc(x, y, 3 + k * 16, 0, 6.283); c.stroke();
+      }
+    }
+  }
+
+  // ---- words ------------------------------------------------------------------------
+  const $ = id => document.getElementById(id);
+  const elName = $('name'), elSize = $('size'), elFact = $('fact'), elLabel = $('label'), elAcross = $('across');
+  const track = $('track'), mark = $('mark'), tourBtn = $('tour');
+  STOPS.forEach(s => { const e = document.createElement('span'); e.style.left = pos(s.z) * 100 + '%'; track.insertBefore(e, mark); });
+  function pos(zz) { return (zz - Z_MIN) / (Z_MAX - Z_MIN); }
+  function fmt(m) {
+    const n = (v, u) => {
+      const p = Math.pow(10, Math.floor(Math.log10(v)) - 1), r = Math.round(v / p) * p;
+      return (r >= 1000 ? Math.round(r).toLocaleString('en') : +r.toPrecision(2)) + ' ' + u;
+    };
+    if (m < 1e-6) return n(m * 1e9, 'nm');
+    if (m < 1e-3) return n(m * 1e6, 'µm');
+    if (m < 1e-2) return n(m * 1e3, 'mm');
+    if (m < 1) return n(m * 100, 'cm');
+    if (m < 1e3) return n(m, 'm');
+    if (m < 1e9) return n(m / 1e3, 'km');
+    if (m < 1e12) return n(m / 1e9, 'million km');
+    if (m < 0.2 * LY) return n(m / 1e12, 'billion km');
+    const ly = m / LY;
+    if (ly < 1e6) return n(ly, 'light-years');
+    if (ly < 1e9) return n(ly / 1e6, 'million light-years');
+    return n(ly / 1e9, 'billion light-years');
+  }
+  let shown = -1;
+  function words() {
+    const i = nearest(z), s = STOPS[i];
+    const gap = Math.min(i > 0 ? s.z - STOPS[i - 1].z : 9, i < STOPS.length - 1 ? STOPS[i + 1].z - s.z : 9);
+    const o = 1 - ss(0.18, 0.42, Math.abs(z - s.z) / gap);
+    if (i !== shown) { shown = i; elName.textContent = s.name; elSize.textContent = s.size; elFact.textContent = s.fact; }
+    elLabel.style.opacity = o.toFixed(3);
+    elAcross.textContent = '↔ ' + fmt(Math.pow(10, z) * Math.max(W, H) / S);
+    mark.style.left = pos(z) * 100 + '%';
+    track.setAttribute('aria-valuenow', i); track.setAttribute('aria-valuetext', s.name + ', ' + s.size);
+  }
+
+  // ---- input ------------------------------------------------------------------------
+  const introEl = $('intro'); let introDone = false;
+  function intro(on) { if (introDone) return; if (!on) { introDone = true; introEl.classList.add('off'); } }
+  cv.addEventListener('wheel', e => {
+    e.preventDefault(); touched();
+    const k = e.deltaMode === 1 ? 0.05 : e.deltaMode === 2 ? 1 : 0.0022;
+    zT = Math.max(Z_MIN, Math.min(Z_MAX, zT + e.deltaY * k));
+  }, { passive: false });
+  const ptrs = new Map(); let pinch0 = 0, z0 = 0, dragY = 0;
+  cv.addEventListener('pointerdown', e => {
+    cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); touched();
+    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); z0 = zT; }
+    else { dragY = e.clientY; z0 = zT; }
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId, [e.clientX, e.clientY]); userAt = t;
+    if (ptrs.size >= 2) {
+      const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      if (pinch0 > 0) zT = z0 - Math.log10(d / pinch0) * 1.6;
+    } else zT = z0 + (e.clientY - dragY) / H * -4;    // drag up to travel out, down to travel in
+    zT = Math.max(Z_MIN, Math.min(Z_MAX, zT));
+  });
+  const up = e => { ptrs.delete(e.pointerId); pinch0 = 0; if (ptrs.size === 1) { const [p] = [...ptrs.values()]; dragY = p[1]; z0 = zT; } };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+
+  function trackPick(e) {
+    const b = track.getBoundingClientRect(), zz = Z_MIN + (e.clientX - b.left) / b.width * (Z_MAX - Z_MIN);
+    touched(); userAt = t; glideTo(nearest(zz), true);
+  }
+  track.addEventListener('pointerdown', trackPick);
+  function stepStop(k) { touched(); userAt = t; glideTo(Math.max(0, Math.min(STOPS.length - 1, nearest(zT) + k)), true); }
+  track.addEventListener('keydown', e => {
+    const k = { ArrowRight: 1, ArrowUp: 1, PageUp: 1, ArrowLeft: -1, ArrowDown: -1, PageDown: -1 }[e.key];
+    if (k) { e.preventDefault(); stepStop(k); }
+    if (e.key === 'Home') { e.preventDefault(); touched(); glideTo(0, true); }
+    if (e.key === 'End') { e.preventDefault(); touched(); glideTo(STOPS.length - 1, true); }
+  });
+  addEventListener('keydown', e => {
+    if (e.target === track || e.target.tagName === 'BUTTON' || e.target.tagName === 'A') return;
+    if (e.key === '+' || e.key === '=' || e.key === 'ArrowDown') { touched(); zT -= 0.5; }
+    if (e.key === '-' || e.key === '_' || e.key === 'ArrowUp') { touched(); zT += 0.5; }
+    if (e.key === 'ArrowRight' || e.key === 'PageUp') stepStop(1);
+    if (e.key === 'ArrowLeft' || e.key === 'PageDown') stepStop(-1);
+    if (e.key === ' ') { e.preventDefault(); setTour(!touring || paused); }
+  });
+  function setTour(on) {
+    touring = on; paused = !on;
+    if (on) { userAt = -1e9; dwell = still ? 6 : 1.2; intro(false); }
+    else glide = null;
+    tourBtn.textContent = on ? 'pause' : '▶ tour';
+    tourBtn.setAttribute('aria-pressed', on);
+    tourBtn.setAttribute('aria-label', on ? 'Pause the tour' : 'Play the tour');
+  }
+  tourBtn.addEventListener('click', () => setTour(!touring || paused));
+  setTour(!still);
+  if (!still) dwell = 3.5;   // a moment to look at yourself before setting off
+
+  // ---- run --------------------------------------------------------------------------
+  function size() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight; S = Math.min(W, H); CY = H * 0.44;   // a little above the middle, clear of the words
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  }
+  addEventListener('resize', size); size();
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    t += dt; if (!still) tw += dt;
+    step(dt); frame(); words();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(now => { last = now; cv.classList.add('ready'); introEl.classList.add('on'); loop(now); });
+  setTimeout(() => intro(false), 9000);
+})();
+</script>
+
 <!-- Deep Field: the way back to the hub -->
 <a id="df-back" href="../" aria-label="Back to Deep Field">&lsaquo; Deep Field</a>
 <style>
