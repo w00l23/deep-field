@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Binary Stars · Deep Field</title>
+<meta name="description" content="Two suns circling each other: Alpha Centauri, Sirius and Algol on their real orbits. Turn them edge-on and watch them eclipse each other.">
+<meta property="og:site_name" content="Deep Field">
+<meta property="og:title" content="Binary Stars · Deep Field">
+<meta property="og:description" content="Two suns circling each other: Alpha Centauri, Sirius and Algol on their real orbits. Turn them edge-on and watch them eclipse each other.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://w00l23.github.io/deep-field/binary-stars/">
+<meta property="og:image" content="https://w00l23.github.io/deep-field/assets/og-binary-stars.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Two glowing stars, one gold and one orange, on crossing orbits against faint stars">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../assets/icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../assets/icons/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#03030a">
+<meta name="color-scheme" content="dark">
+<style>
+  :root{
+    --ink:#ece8f4;
+    --dim:rgba(214,210,234,.74);
+    --soft:rgba(214,210,234,.56);
+    --line:rgba(214,210,234,.14);
+    --focus:rgba(220,215,255,.8);
+    --sat:env(safe-area-inset-top,0px);
+    --sab:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#03030a;color:var(--ink);overflow:hidden;
+    font-family:Georgia,"Times New Roman",serif;-webkit-font-smoothing:antialiased}
+  #view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;outline:none;
+    opacity:0;transition:opacity 2.4s ease}
+  #view.ready{opacity:1}
+  #view.drag{cursor:grabbing}
+
+  /* arrival: a quiet name and how to move, gone after the first touch */
+  #title{
+    position:fixed;z-index:3;left:0;right:0;top:calc(9vh + var(--sat));
+    text-align:center;pointer-events:none;opacity:0;transition:opacity 2.4s ease .6s;
+  }
+  #title.on{opacity:1}
+  #title.off{opacity:0;transition:opacity 1.4s ease}
+  #title h1{
+    margin:0;font-weight:normal;
+    font-size:clamp(1rem,2.6vw,1.3rem);letter-spacing:.3em;text-indent:.3em;text-transform:uppercase;
+    color:rgba(240,236,248,.86);text-shadow:0 0 18px #000;
+  }
+  #title p{
+    margin:.8rem 1.5rem 0;font-size:.8rem;line-height:1.6;letter-spacing:.06em;font-style:italic;
+    color:var(--dim);text-shadow:0 0 12px #000;
+  }
+
+  /* the dock: what you are looking at, the light that reaches us, and the three pairs */
+  #dock{
+    position:fixed;z-index:4;left:50%;bottom:calc(14px + var(--sab));transform:translateX(-50%);
+    width:min(560px,calc(100vw - 28px));text-align:center;
+    opacity:0;transition:opacity 2s ease 1.2s;
+  }
+  #dock.on{opacity:1}
+  #about{
+    margin:0 auto 10px;max-width:30rem;min-height:3.2em;
+    font-size:.84rem;line-height:1.6;letter-spacing:.03em;font-style:italic;color:var(--dim);
+    text-shadow:0 0 10px #000,0 0 2px #000;transition:opacity .5s ease;
+  }
+  #about.fade{opacity:0}
+  #about b{font-weight:normal;font-style:normal;color:rgba(240,236,248,.9)}
+
+  #curve-wrap{position:relative;height:50px;margin:0 4px;cursor:ew-resize;touch-action:none}
+  #curve{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #curve-lab{position:absolute;left:0;top:-2px;font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:var(--soft);pointer-events:none}
+  #curve-tip{position:absolute;right:0;top:-2px;font-size:.7rem;letter-spacing:.04em;font-style:italic;color:var(--soft);
+    pointer-events:none;opacity:0;transition:opacity .8s ease}
+  #curve-tip.on{opacity:1}
+
+  #pairs{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:4px}
+  #pairs button{
+    min-height:42px;padding:0 11px;margin:0;background:none;border:0;cursor:pointer;
+    font:13px/1 Georgia,"Times New Roman",serif;letter-spacing:.08em;color:var(--soft);
+    -webkit-tap-highlight-color:transparent;transition:color .3s ease;position:relative;
+  }
+  #pairs button:hover,#pairs button:focus-visible{color:rgba(240,236,255,.92);outline:none}
+  #pairs button:focus-visible{outline:2px solid var(--focus);outline-offset:-6px;border-radius:10px}
+  #pairs button[aria-pressed="true"]{color:var(--ink)}
+  #pairs [data-k][aria-pressed="true"]::after{
+    content:"";position:absolute;left:50%;bottom:9px;width:4px;height:4px;margin-left:-2px;border-radius:50%;
+    background:rgba(240,226,200,.85);box-shadow:0 0 6px rgba(255,220,170,.7);
+  }
+  #pairs .sep{width:1px;height:14px;margin:0 6px;background:var(--line)}
+  #pairs .ic{width:42px;padding:0}
+  #pairs .ic svg{display:block;margin:auto;width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round}
+  #pairs .ic svg .fill{fill:currentColor;stroke:none}
+  #play[aria-pressed="false"] .pz,#play[aria-pressed="true"] .pl{display:none}
+  #earth[aria-pressed="true"]{color:rgba(240,226,200,.9)}
+
+  .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* on a short, wide screen (a phone on its side) the dock gets out of the way */
+  @media (max-height:460px){
+    #about{display:none}
+    #curve-wrap{height:36px}
+    #title{top:calc(4vh + var(--sat))}
+  }
+  @media (prefers-reduced-motion:reduce){
+    #view,#title,#dock,#about{transition:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="view" tabindex="0" aria-label="Two stars orbiting each other. Drag or use the arrow keys to turn them, scroll or pinch to come closer."></canvas>
+
+<div id="title">
+  <h1>Binary Stars</h1>
+  <p>drag to turn them &middot; scroll or pinch to come closer</p>
+</div>
+
+<div id="dock">
+  <p id="about" aria-live="polite"></p>
+  <div id="curve-wrap" title="Drag along the line to move through one orbit">
+    <canvas id="curve" aria-hidden="true"></canvas>
+    <span id="curve-lab">light reaching us</span>
+    <span id="curve-tip">turn them edge-on to see an eclipse</span>
+  </div>
+  <div id="pairs" role="group" aria-label="Choose a pair of stars">
+    <button type="button" data-k="acen" aria-pressed="true">Alpha Centauri</button>
+    <button type="button" data-k="sirius" aria-pressed="false">Sirius</button>
+    <button type="button" data-k="algol" aria-pressed="false">Algol</button>
+    <span class="sep" aria-hidden="true"></span>
+    <button type="button" class="ic" id="earth" aria-pressed="false" aria-label="Turn them to how we see them from Earth" title="As seen from Earth">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12"/></svg>
+    </button>
+    <button type="button" class="ic" id="play" aria-pressed="true" aria-label="Pause" title="Pause (space)">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path class="pz" d="M5.5 3.5v9M10.5 3.5v9"/><path class="pl fill" d="M5 3l8 5-8 5z"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+/* Binary Stars
+   Two stars on their real orbits about their shared centre of mass. Each
+   frame solves Kepler's equation for where the pair is in its orbit, splits
+   that between the two stars by their masses, tilts the plane towards the
+   viewer and paints them. The strip below is the light that would reach a
+   distant eye looking from here, over one whole orbit: flat when the stars
+   pass clear of each other, dipping when one slides in front of the other.
+   Turn them, and the eclipses come and go. */
+(() => {
+  const cv = document.getElementById('view'), g = cv.getContext('2d');
+  const cc = document.getElementById('curve'), gc = cc.getContext('2d');
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+  const TAU = Math.PI * 2, D2R = Math.PI / 180;
+
+  // ---- the pairs ------------------------------------------------------------
+  // a: semi-major axis of the relative orbit = 1. r: drawn radius in those
+  // units (only Algol is drawn true to size; the others would be specks).
+  // L: luminosity in suns. tilt: the orbit's inclination as we see it from
+  // Earth. w: argument of periastron. view: the angle we first look from.
+  const PAIRS = {
+    acen: {
+      name: 'Alpha Centauri', P: '79.9 years', secs: 26, e: 0.518, i: 79.2, w: 232.3, view: 58,
+      stars: [
+        { n: 'Alpha Centauri A', m: 1.08, L: 1.52, r: 0.075, c: [255, 236, 204] },
+        { n: 'B', m: 0.91, L: 0.50, r: 0.058, c: [255, 196, 140] },
+      ],
+      about: 'The nearest stars to the Sun, <b>4.4 light years</b> away: two suns a lot like ours, circling each other every <b>79.9 years</b>.',
+    },
+    sirius: {
+      name: 'Sirius', P: '50.1 years', secs: 22, e: 0.592, i: 136.3, w: 149.2, view: 50,
+      stars: [
+        { n: 'Sirius A', m: 2.06, L: 25.4, r: 0.085, c: [214, 226, 255] },
+        { n: 'Sirius B, a white dwarf', m: 1.02, L: 0.056, r: 0.022, c: [236, 242, 255] },
+      ],
+      about: 'The brightest star in our night sky, and a white dwarf no bigger than the Earth on a long loop around it every <b>50.1 years</b>.',
+    },
+    algol: {
+      name: 'Algol', P: '2 days 21 hours', secs: 14, e: 0.0, i: 98.6, w: 90, view: 98.6,
+      stars: [
+        { n: 'Algol A', m: 3.17, L: 182, r: 0.205, c: [186, 206, 255] },
+        { n: 'B', m: 0.70, L: 6.9, r: 0.262, c: [255, 186, 128] },
+      ],
+      about: 'The Demon Star, <b>drawn true to size</b>. From Earth we see it edge-on, so every <b>2 days 21 hours</b> the dim star covers the bright one and Algol fades.',
+    },
+  };
+
+  // ---- state ----------------------------------------------------------------
+  let W = 0, H = 0, dpr = 1, CW = 0, CH = 0;
+  let pair = PAIRS.acen, key = 'acen';
+  let phase = 0.62;                       // where in the orbit, 0..1 of mean anomaly
+  let playing = !still.matches;
+  let tilt = pair.view, spin = 0, zoom = 1;          // what we see now
+  let goTilt = tilt, goSpin = spin;                   // what the view is easing towards
+  let fit = 1, goFit = 1;                             // scale that keeps the pair on screen
+  let raf = 0, last = 0, bg = null, curveDirty = true;
+
+  // ---- orbit maths ----------------------------------------------------------
+  function kepler(Mn, e) {                // eccentric anomaly from mean anomaly
+    let E = e < 0.8 ? Mn : Math.PI;
+    for (let k = 0; k < 8; k++) E -= (E - e * Math.sin(E) - Mn) / (1 - e * Math.cos(E));
+    return E;
+  }
+  function relative(ph, p) {              // the relative orbit, in its own plane
+    const E = kepler(TAU * ph, p.e);
+    return [Math.cos(E) - p.e, Math.sqrt(1 - p.e * p.e) * Math.sin(E)];
+  }
+  // in-plane point -> view space [x right, y up, z toward the eye]
+  function toView(x, y, p, tl, sp) {
+    const a = (p.w + sp) * D2R, ca = Math.cos(a), sa = Math.sin(a);
+    const X = x * ca - y * sa, Y = x * sa + y * ca;
+    const t = tl * D2R;
+    return [X, Y * Math.cos(t), Y * Math.sin(t)];
+  }
+  function stars(ph, p, tl, sp) {         // both stars, each pulled by the other's share of the mass
+    const [x, y] = relative(ph, p), M = p.stars[0].m + p.stars[1].m;
+    const f0 = -p.stars[1].m / M, f1 = p.stars[0].m / M;
+    return [toView(x * f0, y * f0, p, tl, sp), toView(x * f1, y * f1, p, tl, sp)];
+  }
+
+  // area two discs share, for how much light the near star blocks
+  function overlap(r1, r2, d) {
+    if (d >= r1 + r2) return 0;
+    if (d <= Math.abs(r1 - r2)) return Math.PI * Math.min(r1, r2) ** 2;
+    const a = r1 * r1 * Math.acos((d * d + r1 * r1 - r2 * r2) / (2 * d * r1));
+    const b = r2 * r2 * Math.acos((d * d + r2 * r2 - r1 * r1) / (2 * d * r2));
+    const c = 0.5 * Math.sqrt((-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2));
+    return a + b - c;
+  }
+  function light(ph, p, tl, sp) {         // fraction of the pair's full light that reaches the eye
+    const s = stars(ph, p, tl, sp), A = p.stars[0], B = p.stars[1];
+    const d = Math.hypot(s[0][0] - s[1][0], s[0][1] - s[1][1]);
+    const back = s[0][2] < s[1][2] ? A : B;
+    const lost = overlap(A.r, B.r, d) * back.L / (Math.PI * back.r * back.r);
+    return 1 - lost / (A.L + B.L);
+  }
+
+  // ---- drawing --------------------------------------------------------------
+  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+  // the far sky, painted once per size: a seeded field so it is the same sky each visit
+  function paintSky() {
+    bg = document.createElement('canvas');
+    bg.width = Math.round(W * dpr); bg.height = Math.round(H * dpr);
+    const b = bg.getContext('2d'); b.scale(dpr, dpr);
+    const grd = b.createRadialGradient(W * .5, H * .45, 0, W * .5, H * .45, Math.max(W, H) * .75);
+    grd.addColorStop(0, '#0a0918'); grd.addColorStop(.6, '#05050e'); grd.addColorStop(1, '#020206');
+    b.fillStyle = grd; b.fillRect(0, 0, W, H);
+    let seed = 20261105;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const n = Math.round(Math.min(700, W * H / 2200));
+    for (let k = 0; k < n; k++) {
+      const x = rnd() * W, y = rnd() * H, dep = rnd(), r = .3 + dep * dep * 1.0;
+      const tint = ['255,255,255', '214,222,255', '255,236,214'][(rnd() * 3) | 0];
+      b.fillStyle = `rgba(${tint},${.12 + dep * .5 * rnd()})`;
+      b.beginPath(); b.arc(x, y, r, 0, TAU); b.fill();
+    }
+  }
+
+  function drawStar(x, y, R, s, glow) {
+    // a wide soft glow, then the disc itself, brighter at its heart and darker at its rim
+    const h = R * (3.2 + glow * 3);
+    let grd = g.createRadialGradient(x, y, R * .6, x, y, h);
+    grd.addColorStop(0, rgba(s.c, .34 * (0.5 + glow))); grd.addColorStop(.35, rgba(s.c, .08 * (0.5 + glow))); grd.addColorStop(1, rgba(s.c, 0));
+    g.fillStyle = grd; g.beginPath(); g.arc(x, y, h, 0, TAU); g.fill();
+    const op = g.globalCompositeOperation; g.globalCompositeOperation = 'source-over';   // the disc keeps its own colour
+    grd = g.createRadialGradient(x - R * .12, y - R * .12, 0, x, y, R);
+    grd.addColorStop(0, rgba(s.c.map(v => Math.round(v + (255 - v) * .65)), 1));
+    grd.addColorStop(.5, rgba(s.c.map(v => Math.min(255, v + 12)), 1));
+    grd.addColorStop(.9, rgba(s.c.map(v => v * .86 | 0), 1));
+    grd.addColorStop(1, rgba(s.c.map(v => v * .7 | 0), 1));
+    g.fillStyle = grd; g.beginPath(); g.arc(x, y, R, 0, TAU); g.fill();
+    g.globalCompositeOperation = op;
+  }
+
+  function scaleNow() { return fit * zoom; }
+  function centre() { return [W / 2, (H - dockH()) / 2 + Math.min(20, H * .03)]; }
+  function dockH() { const d = document.getElementById('dock'); return d.offsetHeight + 20; }
+
+  function draw() {
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    // the sky turns a touch as you turn the pair
+    const off = ((spin * 1.4) % W + W) % W;
+    g.drawImage(bg, -off, 0, W, H); g.drawImage(bg, W - off, 0, W, H);
+
+    const p = pair, S = scaleNow(), [cx, cy] = centre();
+    const scr = v => [cx + v[0] * S, cy - v[1] * S];
+    const M = p.stars[0].m + p.stars[1].m, share = [-p.stars[1].m / M, p.stars[0].m / M];
+
+    // each star's whole path, faint, then the stretch it has just come along, brighter
+    g.lineCap = 'round';
+    for (let k = 0; k < 2; k++) {
+      const s = p.stars[k], f = share[k];
+      g.strokeStyle = rgba(s.c, .13); g.lineWidth = 1;
+      g.beginPath();
+      for (let j = 0; j <= 160; j++) {
+        const E = j / 160 * TAU, x = (Math.cos(E) - p.e) * f, y = Math.sqrt(1 - p.e * p.e) * Math.sin(E) * f;
+        const q = scr(toView(x, y, p, tilt, spin));
+        j ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]);
+      }
+      g.stroke();
+      const N = 48, span = .32;
+      let prev = null;
+      for (let j = 0; j <= N; j++) {
+        const ph = phase - span * (1 - j / N);
+        const [x, y] = relative(ph, p), q = scr(toView(x * f, y * f, p, tilt, spin));
+        if (prev) {
+          g.strokeStyle = rgba(s.c, .5 * (j / N) ** 1.6); g.lineWidth = 1.4;
+          g.beginPath(); g.moveTo(prev[0], prev[1]); g.lineTo(q[0], q[1]); g.stroke();
+        }
+        prev = q;
+      }
+    }
+
+    // the centre of mass: the still point they both turn about
+    g.strokeStyle = 'rgba(230,226,246,.34)'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(cx - 5, cy); g.lineTo(cx + 5, cy); g.moveTo(cx, cy - 5); g.lineTo(cx, cy + 5); g.stroke();
+
+    // the stars, the far one first
+    const pos = stars(phase, p, tilt, spin);
+    const order = pos[0][2] < pos[1][2] ? [0, 1] : [1, 0];
+    const Lmax = Math.max(p.stars[0].L, p.stars[1].L);
+    const R = p.stars.map(s => Math.max(2.2, s.r * S));
+    g.globalCompositeOperation = 'lighter';
+    for (const k of order) {
+      const q = scr(pos[k]);
+      if (k === order[1]) {               // the near star hides what is behind it
+        g.globalCompositeOperation = 'source-over';
+        g.fillStyle = '#04040a'; g.beginPath(); g.arc(q[0], q[1], R[k], 0, TAU); g.fill();
+        g.globalCompositeOperation = 'lighter';
+      }
+      drawStar(q[0], q[1], R[k], p.stars[k], Math.pow(p.stars[k].L / Lmax, .25));
+    }
+    g.globalCompositeOperation = 'source-over';
+
+    // names, small, beside each star
+    g.font = '11px Georgia, "Times New Roman", serif';
+    g.textBaseline = 'middle'; g.textAlign = 'left';
+    for (let k = 0; k < 2; k++) {
+      const q = scr(pos[k]), s = p.stars[k];
+      let left = q[0] > cx + 4 || (Math.abs(q[0] - cx) <= 4 && k === 1);
+      const tw = g.measureText(s.n).width;
+      if (left && q[0] + R[k] + 10 + tw > W - 8) left = false;
+      else if (!left && q[0] - R[k] - 10 - tw < 8) left = true;
+      const dx = (R[k] + 10) * (left ? 1 : -1);
+      g.textAlign = left ? 'left' : 'right';
+      g.fillStyle = 'rgba(0,0,0,.6)'; g.fillText(s.n, q[0] + dx + .5, q[1] - R[k] * .6 - 6 + .5);
+      g.fillStyle = 'rgba(226,222,244,.62)'; g.fillText(s.n, q[0] + dx, q[1] - R[k] * .6 - 6);
+    }
+  }
+
+  // ---- the light curve -----------------------------------------------------
+  let curveVals = [], curveMin = 1, shift = 0;   // shift puts the deepest eclipse in the middle
+  function buildCurve() {
+    const N = 360; curveVals = new Array(N + 1); curveMin = 1;
+    for (let j = 0; j <= N; j++) { const v = light(j / N, pair, tilt, spin); curveVals[j] = v; if (v < curveMin) curveMin = v; }
+    curveDirty = false;
+    if (curveMin < .999) {
+      let jm = 0; for (let j = 0; j < N; j++) if (curveVals[j] < curveVals[jm]) jm = j;
+      shift = .5 - jm / N;
+    } else shift = 0;
+    document.getElementById('curve-tip').classList.toggle('on', curveMin > .999);
+  }
+  function drawCurve() {
+    if (curveDirty) buildCurve();
+    gc.setTransform(dpr, 0, 0, dpr, 0, 0);
+    gc.clearRect(0, 0, CW, CH);
+    const top = 16, bot = CH - 5, N = curveVals.length - 1;
+    const yOf = v => top + (1 - v) * (bot - top);   // the full height is all the light down to none
+    gc.strokeStyle = 'rgba(214,210,234,.10)'; gc.lineWidth = 1;
+    gc.beginPath(); gc.moveTo(0, bot + .5); gc.lineTo(CW, bot + .5); gc.stroke();
+    const grd = gc.createLinearGradient(0, 0, CW, 0);
+    const c0 = pair.stars[0].c, c1 = pair.stars[1].c;
+    grd.addColorStop(0, rgba(c0, .2)); grd.addColorStop(.5, rgba(c0, .75)); grd.addColorStop(1, rgba(c1, .2));
+    gc.strokeStyle = grd; gc.lineWidth = 1.3; gc.lineJoin = 'round';
+    gc.beginPath();
+    const at = x => curveVals[Math.round((((x - shift) % 1) + 1) % 1 * N)];
+    for (let j = 0; j <= N; j++) { const x = j / N * CW, y = yOf(at(j / N)); j ? gc.lineTo(x, y) : gc.moveTo(x, y); }
+    gc.stroke();
+    const ph = ((phase % 1) + 1) % 1, x = (((ph + shift) % 1) + 1) % 1 * CW, v = light(ph, pair, tilt, spin), y = yOf(v);
+    gc.fillStyle = 'rgba(255,238,214,.18)'; gc.beginPath(); gc.arc(x, y, 7, 0, TAU); gc.fill();
+    gc.fillStyle = 'rgba(255,244,228,.95)'; gc.beginPath(); gc.arc(x, y, 2.6, 0, TAU); gc.fill();
+  }
+
+  // ---- size and fit ----------------------------------------------------------
+  function fitFor(p) {
+    const M = p.stars[0].m + p.stars[1].m;
+    let ext = 0;
+    for (let k = 0; k < 2; k++) ext = Math.max(ext, (1 + p.e) * p.stars[1 - k].m / M + p.stars[k].r * 1.4);
+    const room = Math.min(W * .43, (H - dockH() - 40) * .44);
+    return room / ext;
+  }
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const r = cc.getBoundingClientRect(); CW = r.width; CH = r.height;
+    cc.width = Math.round(CW * dpr); cc.height = Math.round(CH * dpr);
+    paintSky();
+    fit = goFit = fitFor(pair);
+    curveDirty = true;
+    paint();
+  }
+
+  // ---- choosing a pair -----------------------------------------------------
+  const about = document.getElementById('about');
+  function choose(k, first) {
+    key = k; pair = PAIRS[k];
+    for (const b of document.querySelectorAll('#pairs [data-k]')) b.setAttribute('aria-pressed', b.dataset.k === k ? 'true' : 'false');
+    goTilt = pair.view; goSpin = 0; zoom = 1;
+    goFit = fitFor(pair);
+    if (first || still.matches) { tilt = goTilt; spin = goSpin; fit = goFit; }
+    setEarth(Math.abs(pair.view - pair.i) < .5);
+    const text = pair.about + ` <span class="vh">Here one orbit takes ${pair.secs} seconds.</span>`;
+    if (first || still.matches) about.innerHTML = text;
+    else { about.classList.add('fade'); setTimeout(() => { about.innerHTML = text; about.classList.remove('fade'); }, 450); }
+    curveDirty = true;
+    wake();
+  }
+  const earthBtn = document.getElementById('earth');
+  function setEarth(on) { earthBtn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  earthBtn.addEventListener('click', () => {
+    goTilt = pair.i; goSpin = 0;
+    if (still.matches) { tilt = goTilt; spin = goSpin; curveDirty = true; }
+    setEarth(true); wake();
+  });
+  document.getElementById('pairs').addEventListener('click', e => {
+    const b = e.target.closest('[data-k]'); if (b && b.dataset.k !== key) choose(b.dataset.k);
+  });
+  const playBtn = document.getElementById('play');
+  function setPlay(on) {
+    playing = on;
+    playBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play');
+    playBtn.title = on ? 'Pause (space)' : 'Play (space)';
+    wake();
+  }
+  playBtn.addEventListener('click', () => setPlay(!playing));
+
+  // ---- turning, zooming, scrubbing -------------------------------------------
+  const pts = new Map();
+  let pinch0 = 0, zoom0 = 1;
+  function hush() { document.getElementById('title').classList.add('off'); }
+  cv.addEventListener('pointerdown', e => {
+    cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]);
+    cv.classList.add('drag'); hush();
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); zoom0 = zoom; }
+  });
+  cv.addEventListener('pointermove', e => {
+    const p0 = pts.get(e.pointerId); if (!p0) return;
+    const p1 = [e.clientX, e.clientY]; pts.set(e.pointerId, p1);
+    if (pts.size === 2) {
+      const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      if (pinch0) zoom = Math.max(.5, Math.min(3, zoom0 * d / pinch0));
+    } else {
+      turn((p1[0] - p0[0]) * .35, (p1[1] - p0[1]) * .3);
+    }
+    wake();
+  });
+  const up = e => { pts.delete(e.pointerId); if (!pts.size) cv.classList.remove('drag'); pinch0 = 0; };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('wheel', e => {
+    e.preventDefault(); hush();
+    zoom = Math.max(.5, Math.min(3, zoom * Math.exp(-e.deltaY * .0015))); wake();
+  }, { passive: false });
+  function turn(dSpin, dTilt) {
+    spin = goSpin = spin + dSpin;
+    tilt = goTilt = Math.max(0, Math.min(180, tilt + dTilt));
+    setEarth(Math.abs(tilt - pair.i) < .5 && Math.abs(((spin % 360) + 360) % 360) < .5);
+    curveDirty = true;
+  }
+  addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('button') && (e.key === ' ' || e.key === 'Enter')) return;
+    const k = e.key;
+    if (k === ' ') { e.preventDefault(); setPlay(!playing); }
+    else if (k === 'ArrowLeft') turn(-6, 0);
+    else if (k === 'ArrowRight') turn(6, 0);
+    else if (k === 'ArrowUp') turn(0, -5);
+    else if (k === 'ArrowDown') turn(0, 5);
+    else if (k === '+' || k === '=') zoom = Math.min(3, zoom * 1.15);
+    else if (k === '-' || k === '_') zoom = Math.max(.5, zoom / 1.15);
+    else if (k === '1' || k === '2' || k === '3') choose(['acen', 'sirius', 'algol'][+k - 1]);
+    else return;
+    hush(); wake();
+  });
+  // drag along the light curve to move through the orbit
+  const cw = document.getElementById('curve-wrap');
+  let scrub = false, wasPlaying = false;
+  function scrubTo(e) { const r = cw.getBoundingClientRect(); phase = ((Math.max(0, Math.min(.9999, (e.clientX - r.left) / r.width)) - shift) % 1 + 1) % 1; wake(); }
+  cw.addEventListener('pointerdown', e => { cw.setPointerCapture(e.pointerId); scrub = true; wasPlaying = playing; playing = false; hush(); scrubTo(e); });
+  cw.addEventListener('pointermove', e => { if (scrub) scrubTo(e); });
+  const endScrub = () => { if (scrub) { scrub = false; playing = wasPlaying; wake(); } };
+  cw.addEventListener('pointerup', endScrub); cw.addEventListener('pointercancel', endScrub);
+
+  // ---- the loop ---------------------------------------------------------------
+  function paint() { draw(); drawCurve(); }
+  function frame(now) {
+    const t = now / 1000, dt = last ? Math.min(t - last, .1) : 0; last = t;
+    let moving = false;
+    if (playing) { phase = (phase + dt / pair.secs) % 1; moving = true; }
+    const ease = 1 - Math.exp(-dt * 2.6);
+    const near = (a, b) => Math.abs(a - b) <= 1e-3 * Math.max(1, Math.abs(b));
+    if (!near(tilt, goTilt) || !near(spin, goSpin)) {          // the view swinging round to a new pair
+      tilt += (goTilt - tilt) * ease; spin += (goSpin - spin) * ease; moving = true; curveDirty = true;
+    } else if (tilt !== goTilt || spin !== goSpin) { tilt = goTilt; spin = goSpin; curveDirty = true; }
+    if (!near(fit, goFit)) { fit += (goFit - fit) * ease; moving = true; } else fit = goFit;
+    paint();
+    raf = moving && !document.hidden ? requestAnimationFrame(frame) : 0;
+    if (!raf) last = 0;
+  }
+  function wake() { if (!raf && !document.hidden) { last = 0; raf = requestAnimationFrame(frame); } }
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { cancelAnimationFrame(raf); raf = 0; } else wake(); });
+  still.addEventListener?.('change', () => setPlay(!still.matches));
+
+  let rz;
+  addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(resize, 120); });
+
+  // ---- arrival -----------------------------------------------------------------
+  W = innerWidth; H = innerHeight;
+  choose('acen', true);
+  setPlay(playing);
+  resize();
+  requestAnimationFrame(() => {
+    cv.classList.add('ready');
+    document.getElementById('title').classList.add('on');
+    document.getElementById('dock').classList.add('on');
+  });
+  setTimeout(hush, 7000);
+  if (new URLSearchParams(location.search).has('still')) { setPlay(false); }   // for preview pictures
+})();
+</script>
+
+<a id="df-back" href="../" aria-label="Back to Deep Field">&lsaquo; Deep Field</a>
+<style>
+  #df-back{position:fixed;z-index:6;top:calc(2px + env(safe-area-inset-top,0px));left:calc(8px + env(safe-area-inset-left,0px));
+    padding:16px 12px;font:12px/1 Georgia,"Times New Roman",serif;letter-spacing:.08em;
+    color:rgba(222,218,242,.54);text-decoration:none;text-shadow:0 0 10px rgba(0,0,0,.9);
+    -webkit-tap-highlight-color:transparent;transition:color .3s ease,opacity .4s ease}
+  #df-back:hover,#df-back:focus-visible{color:rgba(240,236,255,.92)}
+  #df-back:focus-visible{outline:2px solid rgba(220,215,255,.8);outline-offset:-6px;border-radius:10px}
+</style>
+</body>
+</html>
