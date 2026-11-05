@@ -3635,6 +3635,8 @@ void main() {
     const b = byKey[k];
     mark({ key: k + '-sky', en: b.en.replace(/^The /, 'the '), es: b.es.replace(/^La /, 'la '), body: b, sky: true });
   }
+  const VENUS_SKY = MARKS.find(m => m.key === 'venus-sky');
+  VENUS_SKY.note = '';
   // with north, east, south and west written on the horizon
   const CARDS = [['N', 'N', 0], ['E', 'E', PI / 2], ['S', 'S', PI], ['W', 'O', 3 * PI / 2]].map(c => {
     const el = document.createElement('span');
@@ -3751,6 +3753,17 @@ void main() {
         }
         const op = m.shown ? m.vis.toFixed(2) : '0';
         if (op !== m.ringOp) m.ring.style.opacity = m.ringOp = op;
+      }
+    }
+    // Venus after dark is low in the west in the evening, or in the east before
+    // dawn: it says which star it is (the Sun's side of the sky gives it away)
+    if (VENUS_SKY.vis > 0.02) {
+      const note = SKY.sunUp > -0.02 ? '' : Math.sin(byKey.venus.azm) < 0 ? T('the evening star', 'el lucero de la tarde') : T('the morning star', 'el lucero del alba');
+      if (note !== VENUS_SKY.note) {
+        VENUS_SKY.note = note;
+        VENUS_SKY.tag.textContent = T(VENUS_SKY.en, VENUS_SKY.es);
+        if (note) { const i = document.createElement('i'); i.textContent = note; VENUS_SKY.tag.appendChild(i); }
+        VENUS_SKY.w = 0;
       }
     }
     for (const m of MARKS) {
