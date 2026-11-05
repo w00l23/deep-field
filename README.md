@@ -16,6 +16,7 @@ with Claude as pair programmer.
 | [The original sketch](https://w00l23.github.io/deep-field/solar-system/original/) | The first version of it: eight planets on circles, canvas 2D. | [`solar-system/original/`](solar-system/original/) |
 | [Wormhole](https://w00l23.github.io/deep-field/wormhole/) | A small ship leaves Earth, tears space open and comes out at Saturn. three.js from a CDN. | [`wormhole/`](wormhole/) |
 | [Rose Black Hole](https://w00l23.github.io/deep-field/black-hole/) | A black hole in deep space, wrapped in a rose and gold disk whose light bends over and under it. One HTML file, raw WebGL shader. | [`black-hole/`](black-hole/) |
+| [Binary Stars](https://w00l23.github.io/deep-field/binary-stars/) | Alpha Centauri, Sirius and Algol on their real orbits, with the light that reaches us as they eclipse. One HTML file, canvas 2D. | [`binary-stars/`](binary-stars/) |
 | [Scale Zoom](https://w00l23.github.io/deep-field/scale-zoom/) | From the width of an atom to the edge of the observable universe, everything drawn at its true size. One HTML file, canvas 2D. | [`scale-zoom/`](scale-zoom/) |
 
 ## Run it locally
@@ -38,8 +39,8 @@ path on GitHub Pages (`/deep-field/`), and falls back to `/` on localhost.
   ([solar-system](https://github.com/w00l23/solar-system),
   [wormhole](https://github.com/w00l23/wormhole)). The only additions are a
   page title, a description and share tags in its `<head>`, and a small
-  "‹ Deep Field" link in the top-left corner back to the hub. The black hole
-  and Scale Zoom were made here, in this repo.
+  "‹ Deep Field" link in the top-left corner back to the hub. The black hole,
+  Binary Stars and Scale Zoom were made here, in this repo.
 - `assets/` holds the card previews, the share images and the icons;
   `404.html` is what GitHub Pages shows for any missing path.
 
@@ -71,7 +72,8 @@ measurements and pictures:
 
 Each sim's folder has the full table in its `CREDITS.md`
 ([solar system](solar-system/CREDITS.md), [wormhole](wormhole/CREDITS.md),
-[black hole](black-hole/CREDITS.md)),
+[black hole](black-hole/CREDITS.md),
+[binary stars](binary-stars/CREDITS.md)),
 including how each map was reduced or changed. The pictures are public
 domain (NASA, USGS); Gaia and SIMBAD ask to be named.
 
