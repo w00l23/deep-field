@@ -38,15 +38,30 @@
     color: #eadcff; text-shadow: 0 0 12px rgba(138, 43, 226, .9); opacity: .4; transition: opacity .3s ease;
   }
   #snd:hover, #snd:focus-visible { opacity: .9; outline: none; }
+  /* one quiet true thing about where the ship is (Deep Field is for learning); up top, clear of the ship */
+  #note {
+    position: fixed; left: 50%; top: calc(58px + env(safe-area-inset-top)); margin: 0; transform: translateX(-50%);
+    width: min(34em, calc(100vw - 48px)); text-align: center; pointer-events: none;
+    font: italic 15px/1.5 Georgia, "Times New Roman", serif; letter-spacing: .02em;
+    color: #f1ecff; text-shadow: 0 0 14px rgba(20, 0, 50, .95), 0 0 3px rgba(0, 0, 0, .9);
+    opacity: 0; transition: opacity .7s ease;
+  }
+  #note.on { opacity: .78; transition: opacity 1.6s ease; }
+  @media (max-width: 520px) { #note { font-size: 14px; } }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="hint"></div>
+<p id="note" aria-live="polite"></p>
+<script>
+  // if the scene has not started after a long wait (an old browser, or a very slow line), say so instead of staying black
+  setTimeout(function () { if (!window.wormhole) { var h = document.getElementById('hint'); h.textContent = 'Still loading \u00b7 reload if it stays dark'; h.className = 'on'; } }, 15000);
+</script>
 <button id="snd" type="button">Sound: chimes</button>
 
 <script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js';
+import * as THREE from './vendor/three.module.min.js';   // three.js r170, kept beside the page so it never waits on another site
 
 const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const rad = THREE.MathUtils.degToRad;
@@ -191,7 +206,8 @@ const canvas = document.getElementById('c'), hint = document.getElementById('hin
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' }); }
 catch (err) { hint.textContent = 'This scene needs WebGL 2'; hint.classList.add('on'); throw err; }
-let pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+const touch = matchMedia('(pointer: coarse)').matches, still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let pixelRatio = Math.min(window.devicePixelRatio || 1, touch ? 1.5 : 2);   // sharper on a big screen; the governor below steps down if it can't keep up
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(50, 1, 0.02, 2500);
 // the world is drawn into this off-screen picture first, so the lens can bend it afterwards
@@ -1384,7 +1400,6 @@ function govern(dt) {
 const query = new URLSearchParams(location.search);
 let time = 0, trip = query.has('t') ? +query.get('t') : -1, fade = 0, phase = '', frameDt = 0;   // trip < 0: waiting by Earth
 const hold = query.has('hold');                                                     // ?t=14&hold freezes a moment to look at
-const touch = matchMedia('(pointer: coarse)').matches;
 
 const _p = V3(), _a = V3(), _d = V3(), _d2 = V3(), _q = V3(), _t = V3(), _up = V3(), _fwd = V3(), _skyQinv = sky.quaternion.clone().invert();
 function upAt(s, out) {
@@ -1400,6 +1415,7 @@ function update() {
   const inTube = s > S_A - 0.08 && s < S_B;
   const tauA = (t - T_RIP_A) * RIP_A_RATE, openA = going ? ss(RIP_PEEL, RIP_OPEN, tauA) : 0;   // the near rip's own clock, and how open it is
   steerStep(frameDt, t, s, going);
+  tellNote(going, t);
   const deep = ss(S_A - 0.8, S_A + 9, s) * (1 - ss(S_B - 9, S_B + 4, s));            // 1 well inside the tunnel, 0 outside
   // the launch: how far into top speed it is; as it builds, the camera falls back (same angle, so the ship stays low-centre)
   const speed = going ? ss(0.15, 1, (sAt(t + 0.05) - s) / 0.05 / V_TOP) * (1 - ss(S_A - 0.5, S_A + 8, s)) : 0;
@@ -1448,7 +1464,7 @@ function update() {
 
   // the shake, once the ship has been placed, so that it shakes with everything else: a kick as the engines light, a buzz
   // that grows with the speed, a jolt going through the rip; it settles in the tunnel
-  const shake = going ? (0.6 * ss(0, 0.06, t) * Math.exp(-t * 1.5) + 0.45 * speed + 1.1 * Math.exp(-Math.pow((t - T_A) / 0.16, 2))) * (1 - 0.75 * deep) : 0;
+  const shake = going && !still ? (0.6 * ss(0, 0.06, t) * Math.exp(-t * 1.5) + 0.45 * speed + 1.1 * Math.exp(-Math.pow((t - T_A) / 0.16, 2))) * (1 - 0.75 * deep) : 0;
   if (shake > 0.001) {
     camera.rotateX(shake * 0.0032 * (0.6 * Math.sin(time * 41) + 0.4 * Math.sin(time * 23 + 1.1)));
     camera.rotateY(shake * 0.0032 * (0.6 * Math.sin(time * 37 + 2.0) + 0.4 * Math.sin(time * 19 + 0.3)));
@@ -1479,7 +1495,7 @@ function update() {
   post.uGlass.value = atA ? reachOut * (1 - 0.6 * openA) * (1 - ss(0.2, 0.6, post.uLensR.value)) : 0;
   post.uRipple.value = going && atA && t >= T_OPEN_A ? clamp01((t - T_OPEN_A) / 0.6) : 1;
   post.uWarp.value = deep * 0.8;
-  post.uFlash.value = going ? 0.24 * Math.exp(-Math.pow((t - T_A - 0.05) / 0.32, 2)) + 0.26 * Math.exp(-Math.pow((t - T_B - 0.1) / 0.5, 2)) : 0;
+  post.uFlash.value = going ? (still ? 0.3 : 1) * 0.24 * Math.exp(-Math.pow((t - T_A - 0.05) / 0.32, 2)) + 0.26 * Math.exp(-Math.pow((t - T_B - 0.1) / 0.5, 2)) : 0;
   post.uFade.value = ss(0, 1.1, fade);
   post.uTime.value = time;
   pathPos(s + 12, tubeMat.uniforms.uAhead.value); tubeMat.uniforms.uFwd.value.copy(_fwd);
@@ -1491,6 +1507,25 @@ function update() {
       : now === 'steer' ? (touch ? 'Drag to steer' : 'Move the mouse or use the arrow keys to steer') : hint.textContent;
     hint.classList.toggle('on', now !== 'trip');
   }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+//  THE NOTES — one short, true line at each stop of the trip
+// ═════════════════════════════════════════════════════════════════════════
+const noteEl = document.getElementById('note');
+const NOTES = {
+  earth: 'Earth, 12,742 km across. The ship waits in high orbit.',
+  tube: 'A wormhole is a shortcut through spacetime. Einstein\u2019s equations allow one; nobody has ever found one.',
+  rings: 'Saturn is about nine Earths wide. Its rings span some 270,000 km, yet are mostly only about ten metres thick.',
+  far: 'Saturn is 1.2 to 1.7 billion km from Earth. Light takes over an hour to cross that; Voyager 1 took three years.',
+};
+let noteKey = '', noteTimer = 0;
+function tellNote(going, t) {
+  const key = !going ? (fade > 2.5 ? 'earth' : '') : t > T_A + 6 && t < T_B - 2.5 ? 'tube'
+    : t > T_B + 1.5 && t < T_PULL + 4.5 ? 'rings' : t > T_PULL + 5.5 ? 'far' : '';
+  if (key === noteKey) return;
+  noteKey = key; noteEl.classList.remove('on'); clearTimeout(noteTimer);
+  if (key) noteTimer = setTimeout(() => { noteEl.textContent = NOTES[key]; noteEl.classList.add('on'); }, 750);   // the old line fades out before the new one comes in
 }
 
 function start() { if (trip >= 0) fade = 0; trip = 0; soundStart(); }                               // a replay cuts back to Earth, so it fades in
@@ -1517,10 +1552,18 @@ window.wormhole = { seek: t => { trip = t; }, get t() { return trip; }, get stee
     return out;
   } };
 
-let last = performance.now();
+let last = performance.now(), smoothDt = 1 / 60;
+// a hidden tab goes quiet, and picks up where it was when it comes back
+document.addEventListener('visibilitychange', () => {
+  if (!sound.ctx) return;
+  if (document.hidden) sound.ctx.suspend(); else if (sound.mode !== 'off') sound.ctx.resume();
+});
 function loop(now) {
   requestAnimationFrame(loop);
-  const raw = (now - last) / 1000, dt = Math.min(raw, 0.1); last = now;
+  const raw = (now - last) / 1000; last = now;
+  // a lightly smoothed clock: a browser's frame times jitter by a millisecond or two, which shows as judder at speed
+  smoothDt = Math.abs(raw - smoothDt) > 0.05 ? Math.min(raw, 0.1) : smoothDt + (raw - smoothDt) * 0.3;
+  const dt = Math.min(smoothDt, 0.1);
   time += dt; fade += dt; frameDt = dt; if (trip >= 0 && !hold) trip += dt;
   update();
   renderer.setRenderTarget(rt); renderer.render(scene, camera);
