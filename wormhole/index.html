@@ -32,21 +32,38 @@
     opacity: 0; transition: opacity .3s ease;
   }
   #hint.on { opacity: .82; transition: opacity 1.4s ease; }
-  #snd {
-    position: fixed; top: calc(10px + env(safe-area-inset-top)); right: 12px; padding: 10px; background: none; border: 0; cursor: pointer;
+  #ctl { position: fixed; top: calc(10px + env(safe-area-inset-top)); right: 12px; display: flex; z-index: 5; }
+  #snd, #calm {
+    padding: 10px; background: none; border: 0; cursor: pointer;
     font: 12px/1 Georgia, "Times New Roman", serif; letter-spacing: .24em; text-transform: uppercase;
     color: #eadcff; text-shadow: 0 0 12px rgba(138, 43, 226, .9); opacity: .4; transition: opacity .3s ease;
   }
-  #snd:hover, #snd:focus-visible { opacity: .9; outline: none; }
+  #snd:hover, #snd:focus-visible, #calm:hover, #calm:focus-visible { opacity: .9; outline: none; }
+  #calm[aria-pressed="true"] { opacity: .78; text-decoration: underline; text-decoration-color: rgba(234, 220, 255, .45); text-underline-offset: 5px; }
+  /* one quiet true thing about where the ship is (Deep Field is for learning); up top, clear of the ship */
+  #note {
+    position: fixed; left: 50%; top: calc(58px + env(safe-area-inset-top)); margin: 0; transform: translateX(-50%);
+    width: min(34em, calc(100vw - 48px)); text-align: center; pointer-events: none;
+    font: italic 15px/1.5 Georgia, "Times New Roman", serif; letter-spacing: .02em;
+    color: #f1ecff; text-shadow: 0 0 14px rgba(20, 0, 50, .95), 0 0 3px rgba(0, 0, 0, .9);
+    opacity: 0; transition: opacity .7s ease;
+  }
+  #note.on { opacity: .78; transition: opacity 1.6s ease; }
+  @media (max-width: 520px) { #note { font-size: 14px; } }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="hint"></div>
-<button id="snd" type="button">Sound: chimes</button>
+<p id="note" aria-live="polite"></p>
+<script>
+  // if the scene has not started after a long wait (an old browser, or a very slow line), say so instead of staying black
+  setTimeout(function () { if (!window.wormhole) { var h = document.getElementById('hint'); h.textContent = 'Still loading \u00b7 reload if it stays dark'; h.className = 'on'; } }, 15000);
+</script>
+<div id="ctl"><button id="calm" type="button" aria-pressed="false" title="Calm: a slower, softer trip with gentle fades (C)">Calm</button><button id="snd" type="button">Sound: chimes</button></div>
 
 <script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js';
+import * as THREE from './vendor/three.module.min.js';   // three.js r170, kept beside the page so it never waits on another site
 
 const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const rad = THREE.MathUtils.degToRad;
@@ -191,7 +208,8 @@ const canvas = document.getElementById('c'), hint = document.getElementById('hin
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' }); }
 catch (err) { hint.textContent = 'This scene needs WebGL 2'; hint.classList.add('on'); throw err; }
-let pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+const touch = matchMedia('(pointer: coarse)').matches, still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let pixelRatio = Math.min(window.devicePixelRatio || 1, touch ? 1.5 : 2);   // sharper on a big screen; the governor below steps down if it can't keep up
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(50, 1, 0.02, 2500);
 // the world is drawn into this off-screen picture first, so the lens can bend it afterwards
@@ -637,14 +655,14 @@ milkyLoaded.then(img => {
   meltTex.needsUpdate = true;
 });
 const tubeMat = new THREE.ShaderMaterial({
-  uniforms: { uTime: { value: 0 }, uAhead: { value: V3() }, uMelt: { value: meltTex }, uFwd: { value: V3(0, 0, -1) }, uLen: { value: TUBE_LEN },
+  uniforms: { uTime: { value: 0 }, uCalm: { value: 0 }, uAhead: { value: V3() }, uMelt: { value: meltTex }, uFwd: { value: V3(0, 0, -1) }, uLen: { value: TUBE_LEN },
     uField: { value: V3() }, uFieldK: { value: 0 } },
   vertexShader: /* glsl */`
     attribute vec2 aTube;
     varying vec3 vWorld; varying vec3 vN; varying vec2 vTube;
     void main() { vWorld = position; vN = normal; vTube = aTube; gl_Position = projectionMatrix * viewMatrix * vec4(position, 1.0); }`,
   fragmentShader: NOISE + SHEEN + /* glsl */`
-    uniform float uTime, uLen, uFieldK; uniform vec3 uAhead, uFwd, uField; uniform sampler2D uMelt;
+    uniform float uTime, uLen, uFieldK, uCalm; uniform vec3 uAhead, uFwd, uField; uniform sampler2D uMelt;
     varying vec3 vWorld; varying vec3 vN; varying vec2 vTube;
     void main() {
       vec3 toCam = cameraPosition - vWorld;
@@ -672,7 +690,7 @@ const tubeMat = new THREE.ShaderMaterial({
       //     The film is rippled, and throws that light at the eye best where it faces the right way.
       vec3 H = normalize(normalize(uAhead - vWorld) + V);
       float ndh = max(dot(Nb, H), 0.0);
-      float light = lum * (0.35 + 0.65 * pow(ndh, 12.0));
+      float light = lum * (0.35 + 0.65 * pow(ndh, mix(12.0, 5.0, uCalm))) * (1.0 - 0.25 * uCalm);   // calm: broader, dimmer light, so fewer sharp streaks
 
       // 4 · THIN-FILM INTERFERENCE.  Light bounces off the top of the film and off the bottom; the
       //     bottom bounce travels further by 2 · thickness · cos(angle inside the film). How many
@@ -692,7 +710,7 @@ const tubeMat = new THREE.ShaderMaterial({
       vec3 col = vec3(0.011, 0.011, 0.016) * (0.6 + 0.8 * w.x);
       col += tint * light * (0.65 + 0.75 * smoothstep(0.75, 1.0, ahead)) * 1.25;
       col += film * pow(1.0 - cosI, 3.0) * 0.05;                          // the faintest sheen at a glancing angle
-      col += mix(vec3(1.0), tint, 0.5) * pow(ndh, 180.0) * (0.10 + 0.90 * min(lum * 2.0, 1.0)) * 0.6;
+      col += mix(vec3(1.0), tint, 0.5) * pow(ndh, 180.0) * (0.10 + 0.90 * min(lum * 2.0, 1.0)) * 0.6 * (1.0 - 0.8 * uCalm);
 
       // 6b · THE SHIP'S FIELD.  A faint light carried just ahead of the ship. It lands on the nearest wall and gathers
       //      where the film is thick, so it lies in pools rather than a ring, and slides along with the ship.
@@ -897,7 +915,7 @@ function makeRip({ center, facing, radius, seed, closed, tint, key }) {
     const grow = 3.2 * (1 - Math.pow(1 - clamp01((tau - 0.55) / 4.0), 2));
     U.uGrow.value = grow + 0.05 * Math.sin(grow * 14);                                // the cracks run in fits and starts
     U.uInner.value = 1 - ss(RIP_PEEL - 0.05, RIP_PEEL + 0.35, tau);                   // once the flaps lift, their own torn edges carry the light
-    U.uDot.value = ss(0, 0.3, tau) * (1 - ss(1.9, 3.2, tau)) * (1 + 0.12 * Math.sin(time * 31));
+    U.uDot.value = ss(0, 0.3, tau) * (1 - ss(1.9, 3.2, tau)) * (1 + 0.12 * (1 - calmK) * Math.sin(time * 12));
     U.uHalo.value = 0.25 * ss(0.3, 1.6, tau) + 0.75 * ss(RIP_PEEL, RIP_OPEN, tau);
     U.uBurn.value = (tau < RIP_OPEN ? 1 : 0.3 + 0.7 * Math.exp(-(tau - RIP_OPEN) / 1.2))   // the torn edges burn while it tears, flare as it comes fully open, then cool
       + 0.9 * Math.exp(-Math.pow((tau - RIP_OPEN) / 0.4, 2));
@@ -1091,7 +1109,7 @@ function flyShip(dt, t, s, going, deep) {
   const T = trail;
   for (let e = 0; e < 2; e++) {
     _e.copy(ENGINES[e]).applyMatrix4(ship.matrix).toArray(T.pos, e * 3);
-    T.size[e] = 0.034 * (0.75 + 0.5 * thr + 0.45 * boost + 0.06 * Math.sin(time * 37 + e * 2)); T.alpha[e] = (0.5 + 0.5 * thr + 0.5 * boost) * seen;
+    T.size[e] = 0.034 * (0.75 + 0.5 * thr + 0.45 * boost + 0.06 * (1 - calmK) * Math.sin(time * 16 + e * 2)); T.alpha[e] = (0.5 + 0.5 * thr + 0.5 * boost) * seen;
   }
   T.debt += dt * (16 + 60 * thr + 70 * boost);
   while (T.debt >= 1) {
@@ -1384,13 +1402,12 @@ function govern(dt) {
 const query = new URLSearchParams(location.search);
 let time = 0, trip = query.has('t') ? +query.get('t') : -1, fade = 0, phase = '', frameDt = 0;   // trip < 0: waiting by Earth
 const hold = query.has('hold');                                                     // ?t=14&hold freezes a moment to look at
-const touch = matchMedia('(pointer: coarse)').matches;
 
 const _p = V3(), _a = V3(), _d = V3(), _d2 = V3(), _q = V3(), _t = V3(), _up = V3(), _fwd = V3(), _skyQinv = sky.quaternion.clone().invert();
 function upAt(s, out) {
   const sc = Math.min(Math.max(s, 0), S_END), x = sc / FR_STEP, i = Math.min(Math.floor(x), FR_N - 1), f = x - i;
   out.set(lerp(frameUp[i * 3], frameUp[i * 3 + 3], f), lerp(frameUp[i * 3 + 1], frameUp[i * 3 + 4], f), lerp(frameUp[i * 3 + 2], frameUp[i * 3 + 5], f)).normalize();
-  const roll = ROLL_FIX * ss(S_A + 3, S_B - 8, s) + 0.55 * Math.sin((s - S_A) * 0.11) * ss(S_A + 2, S_A + 14, s) * (1 - ss(S_B - 22, S_B - 8, s));
+  const roll = ROLL_FIX * ss(S_A + 3, S_B - 8, s) + (1 - calmK) * 0.55 * Math.sin((s - S_A) * 0.11) * ss(S_A + 2, S_A + 14, s) * (1 - ss(S_B - 22, S_B - 8, s));
   path.getTangentAt(sc / S_END, _t); _q.crossVectors(_t, out);
   return out.multiplyScalar(Math.cos(roll)).addScaledVector(_q, Math.sin(roll));
 }
@@ -1400,6 +1417,7 @@ function update() {
   const inTube = s > S_A - 0.08 && s < S_B;
   const tauA = (t - T_RIP_A) * RIP_A_RATE, openA = going ? ss(RIP_PEEL, RIP_OPEN, tauA) : 0;   // the near rip's own clock, and how open it is
   steerStep(frameDt, t, s, going);
+  tellNote(going, t);
   const deep = ss(S_A - 0.8, S_A + 9, s) * (1 - ss(S_B - 9, S_B + 4, s));            // 1 well inside the tunnel, 0 outside
   // the launch: how far into top speed it is; as it builds, the camera falls back (same angle, so the ship stays low-centre)
   const speed = going ? ss(0.15, 1, (sAt(t + 0.05) - s) / 0.05 / V_TOP) * (1 - ss(S_A - 0.5, S_A + 8, s)) : 0;
@@ -1440,7 +1458,7 @@ function update() {
   tubeMat.stencilWrite = !inTube;                                                    // inside, no window needed: the tube is all there is
   sky.visible = deep < 0.999;
 
-  earthMat.uniforms.uTime.value = time; satUniforms.uTime.value = time; tubeMat.uniforms.uTime.value = time;
+  earthMat.uniforms.uTime.value = time; satUniforms.uTime.value = time; tubeMat.uniforms.uTime.value = tubeClock; tubeMat.uniforms.uCalm.value = calmK;
   satUniforms.uCamL.value.copy(_p).sub(SAT_POS).applyQuaternion(SAT_QINV);
   moonPts.material.uniforms.uSunV.value.copy(SUN).transformDirection(camera.matrixWorldInverse);
   moonPts.material.uniforms.uScale.value = rt.height / (2 * Math.tan(rad(camera.fov) / 2));
@@ -1448,7 +1466,7 @@ function update() {
 
   // the shake, once the ship has been placed, so that it shakes with everything else: a kick as the engines light, a buzz
   // that grows with the speed, a jolt going through the rip; it settles in the tunnel
-  const shake = going ? (0.6 * ss(0, 0.06, t) * Math.exp(-t * 1.5) + 0.45 * speed + 1.1 * Math.exp(-Math.pow((t - T_A) / 0.16, 2))) * (1 - 0.75 * deep) : 0;
+  const shake = going && calmK < 1 ? (1 - calmK) * (0.6 * ss(0, 0.06, t) * Math.exp(-t * 1.5) + 0.45 * speed + 1.1 * Math.exp(-Math.pow((t - T_A) / 0.16, 2))) * (1 - 0.75 * deep) : 0;
   if (shake > 0.001) {
     camera.rotateX(shake * 0.0032 * (0.6 * Math.sin(time * 41) + 0.4 * Math.sin(time * 23 + 1.1)));
     camera.rotateY(shake * 0.0032 * (0.6 * Math.sin(time * 37 + 2.0) + 0.4 * Math.sin(time * 19 + 0.3)));
@@ -1460,7 +1478,7 @@ function update() {
   // at speed the stars draw out into streaks, rushing outward from where the ship is heading (only on the way out:
   // inside the tunnel the sky is the walls' light, and the arrival at Saturn stays as it was)
   const streaks = sky.getObjectByName('streaks').material.uniforms;
-  streaks.uStreak.value = 0.085 * speed; streaks.uFwd.value.copy(_fwd).applyQuaternion(_skyQinv);
+  streaks.uStreak.value = 0.085 * speed * (1 - 0.7 * calmK); streaks.uFwd.value.copy(_fwd).applyQuaternion(_skyQinv);
 
   // the lens: space ahead of the ship bends like glass once its field reaches out, then round the rip it tears
   const atA = s <= S_A, reachOut = going ? ss(T_FIELD, T_FIELD + 0.5, t) : 0, open = atA ? reachOut * (0.6 + 0.4 * openA) : 0;
@@ -1478,9 +1496,9 @@ function update() {
   post.uLensK.value = lensK; post.uRod.value = rod; post.uRodReach.value = 1.1 * reachOut;
   post.uGlass.value = atA ? reachOut * (1 - 0.6 * openA) * (1 - ss(0.2, 0.6, post.uLensR.value)) : 0;
   post.uRipple.value = going && atA && t >= T_OPEN_A ? clamp01((t - T_OPEN_A) / 0.6) : 1;
-  post.uWarp.value = deep * 0.8;
-  post.uFlash.value = going ? 0.24 * Math.exp(-Math.pow((t - T_A - 0.05) / 0.32, 2)) + 0.26 * Math.exp(-Math.pow((t - T_B - 0.1) / 0.5, 2)) : 0;
-  post.uFade.value = ss(0, 1.1, fade);
+  post.uWarp.value = deep * 0.8 * (1 - 0.5 * calmK);
+  post.uFlash.value = going ? (1 - calmK) * (0.24 * Math.exp(-Math.pow((t - T_A - 0.05) / 0.32, 2)) + 0.26 * Math.exp(-Math.pow((t - T_B - 0.1) / 0.5, 2)) ) : 0;
+  post.uFade.value = ss(0, 1.1, fade) * veil;
   post.uTime.value = time;
   pathPos(s + 12, tubeMat.uniforms.uAhead.value); tubeMat.uniforms.uFwd.value.copy(_fwd);
 
@@ -1493,17 +1511,72 @@ function update() {
   }
 }
 
-function start() { if (trip >= 0) fade = 0; trip = 0; soundStart(); }                               // a replay cuts back to Earth, so it fades in
+// ═════════════════════════════════════════════════════════════════════════
+//  CALM — a slower, softer trip. On by itself when the device asks for reduced
+//  motion; anyone can switch it with the Calm button (or C). Instead of the fast
+//  launch and the dives through each mouth, the picture fades: Earth → (fade) →
+//  inside the tunnel, which runs at 60% speed with its colours flowing at half
+//  speed → (fade) → out at Saturn. No shake, no roll, no flashes, no flicker.
+//  With calm off, every line of the trip is as it was.
+// ═════════════════════════════════════════════════════════════════════════
+const calmBtn = document.getElementById('calm');
+const CUT_OUT = 1.1, CUT_IN = 1.6, CALM_RATE = 0.6;                    // fade to black · fade back in · how fast the tunnel goes by
+let calm = still, calmK = still ? 1 : 0, cut = null, veil = 1, tubeClock = 0;
+try { const c = localStorage.getItem('wormhole-calm'); if (c === '1' || c === '0') calm = c === '1'; calmK = calm ? 1 : 0; } catch (err) {}
+function calmSet(on, save) {
+  calm = on; calmBtn.setAttribute('aria-pressed', String(on));
+  if (save) try { localStorage.setItem('wormhole-calm', on ? '1' : '0'); } catch (err) {}
+}
+calmSet(calm, false);
+calmBtn.addEventListener('click', () => { calmSet(!calm, true); calmBtn.blur(); });
+function calmStep(dt) {
+  calmK += ((calm ? 1 : 0) - calmK) * Math.min(1, dt * 2);                // eases between the two, so a switch mid-trip never jumps
+  if (Math.abs(calmK - (calm ? 1 : 0)) < 1e-4) calmK = calm ? 1 : 0;
+  tubeClock += dt * (1 - 0.5 * calmK);
+  if (cut) {                                                             // a fade: down to black, a jump on the trip's clock, back up
+    cut.k += dt;
+    if (!cut.done && cut.k >= CUT_OUT) { trip = cut.to; cut.done = true; }
+    veil = cut.done ? ss(0, CUT_IN, cut.k - CUT_OUT) : 1 - ss(0, CUT_OUT, cut.k);
+    if (cut.done && cut.k >= CUT_OUT + CUT_IN) { cut = null; veil = 1; }
+  } else if (calm && !hold && trip >= T_B - 1.8 && trip < T_B + 0.9) cut = { k: 0, to: T_B + 0.9 };   // the far mouth: fade, and come out at Saturn
+}
+const tripRate = () => calm && trip > T_A && trip < T_B ? CALM_RATE : 1;
+
+// ═════════════════════════════════════════════════════════════════════════
+//  THE NOTES — one short, true line at each stop of the trip
+// ═════════════════════════════════════════════════════════════════════════
+const noteEl = document.getElementById('note');
+const NOTES = {
+  earth: 'Earth, 12,742 km across. The ship waits in high orbit.',
+  tube: 'A wormhole is a shortcut through spacetime. Einstein\u2019s equations allow one; nobody has ever found one.',
+  rings: 'Saturn is about nine Earths wide. Its rings span some 270,000 km, yet are mostly only about ten metres thick.',
+  far: 'Saturn is 1.2 to 1.7 billion km from Earth. Light takes over an hour to cross that; Voyager 1 took three years.',
+};
+let noteKey = '', noteTimer = 0;
+function tellNote(going, t) {
+  const key = !going ? (fade > 2.5 ? 'earth' : '') : t > T_A + 6 && t < T_B - 2.5 ? 'tube'
+    : t > T_B + 1.5 && t < T_PULL + 4.5 ? 'rings' : t > T_PULL + 5.5 ? 'far' : '';
+  if (key === noteKey) return;
+  noteKey = key; noteEl.classList.remove('on'); clearTimeout(noteTimer);
+  if (key) noteTimer = setTimeout(() => { noteEl.textContent = NOTES[key]; noteEl.classList.add('on'); }, 750);   // the old line fades out before the new one comes in
+}
+
+function start() {
+  soundStart();
+  if (calm) { cut = { k: 0, to: T_A + 0.9 }; return; }                                   // calm: fade out, and fade in already inside the tunnel
+  if (trip >= 0) fade = 0; trip = 0;
+}                               // a replay cuts back to Earth, so it fades in
 // A press starts the trip when we are waiting by Earth or have arrived; mid-trip it does nothing. It is judged by the
 // clock itself, so it cannot be a frame out of date, and that also makes the several events one tap sends count once.
-const press = e => { if (e && e.target === sndBtn) return; if (trip < 0 || trip >= T_DONE - 1.5) start(); };
+const press = e => { if (e && (e.target === sndBtn || e.target === calmBtn) || cut) return; if (trip < 0 || trip >= T_DONE - 1.5) start(); };
 addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (/^(Arrow(Up|Down|Left|Right)|Key[WASD])$/.test(e.code)) { e.preventDefault(); steer.keys.add(e.code); return; }
   if (e.repeat) return;
   if (e.code === 'Space') { e.preventDefault(); press(); }
   else if (e.code === 'KeyM') soundSet(sound.mode === 'off' ? sound.last : 'off');
-  else if (e.code === 'KeyR') start();
+  else if (e.code === 'KeyR') { if (!cut) start(); }
+  else if (e.code === 'KeyC') calmSet(!calm, true);
 });
 // anywhere on the page, and by whichever event the browser sends for a tap: not all of them send every one
 for (const type of ['pointerdown', 'touchstart', 'mousedown', 'click']) addEventListener(type, press, { passive: true });
@@ -1517,11 +1590,19 @@ window.wormhole = { seek: t => { trip = t; }, get t() { return trip; }, get stee
     return out;
   } };
 
-let last = performance.now();
+let last = performance.now(), smoothDt = 1 / 60;
+// a hidden tab goes quiet, and picks up where it was when it comes back
+document.addEventListener('visibilitychange', () => {
+  if (!sound.ctx) return;
+  if (document.hidden) sound.ctx.suspend(); else if (sound.mode !== 'off') sound.ctx.resume();
+});
 function loop(now) {
   requestAnimationFrame(loop);
-  const raw = (now - last) / 1000, dt = Math.min(raw, 0.1); last = now;
-  time += dt; fade += dt; frameDt = dt; if (trip >= 0 && !hold) trip += dt;
+  const raw = (now - last) / 1000; last = now;
+  // a lightly smoothed clock: a browser's frame times jitter by a millisecond or two, which shows as judder at speed
+  smoothDt = Math.abs(raw - smoothDt) > 0.05 ? Math.min(raw, 0.1) : smoothDt + (raw - smoothDt) * 0.3;
+  const dt = Math.min(smoothDt, 0.1);
+  time += dt; fade += dt; frameDt = dt; calmStep(dt); if (trip >= 0 && !hold) trip += dt * tripRate();
   update();
   renderer.setRenderTarget(rt); renderer.render(scene, camera);
   renderer.setRenderTarget(null); renderer.render(postScene, postCam);

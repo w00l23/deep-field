@@ -25,5 +25,6 @@ own shaders.
 The sounds are made in the page, from oscillators and generated noise;
 nothing in it is recorded.
 
-The page loads [three.js](https://threejs.org) r170 (MIT licence) from the
-jsDelivr CDN.
+The page loads [three.js](https://threejs.org) r170 (MIT licence) from its own
+copy in `vendor/` (licence in `vendor/three-LICENSE.txt`), so it never waits on
+another site.
