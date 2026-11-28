@@ -1355,25 +1355,41 @@ void main() {
   gl_Position = clip(vV);
 }
 `;
-  const F_DISK = F_HEAD + NOISE + COLOUR + `
-varying vec2 vW;
-varying vec3 vV;
-uniform vec3 uN;          // the plane's up, in view space
-uniform float uNep, uSpin, uAlpha;
-float shade(vec2 w);
+  // the dust itself is worked out once, when the page starts, into a picture
+  // laid out by angle (across) and distance (down): a phone then pays two
+  // lookups a pixel for it, not three clouds of noise
+  const F_DISKBAKE = F_HEAD + NOISE + `
+varying vec2 vP;
 void main() {
-  float r = length(vW), rn = r / uNep;
-  if (rn > 1.32) discard;
-  float th = atan(vW.y, vW.x);
-  // the swirl: arcs wound a little into a spiral, the inner ones turning faster
-  float sw = th + 0.9 * log(1.0 + rn * 12.0) - uSpin / (0.25 + rn);
+  float sw = (vP.x * 0.5 + 0.5) * TAU, rn = (vP.y * 0.5 + 0.5) * 1.32;
   vec2 cs = vec2(cos(sw), sin(sw));
   float wob = fbm(vec3(cs * 1.6, rn * 3.0));
   float lines = 0.5 + 0.5 * sin(rn * 62.0 + wob * 9.0);
   lines = lines * lines * lines;
   float bands = fbm(vec3(rn * 8.0, cs * 0.9));
-  float dust = fbm(vec3(vW / uNep * 3.2, 1.7));
+  float dust = fbm(vec3(cs * rn * 3.2, 1.7));
   float dens = clamp(0.62 * bands + 0.32 * lines * (0.5 + bands) + 0.40 * (dust - 0.35), 0.0, 1.4);
+  gl_FragColor = vec4(vec3(dens / 1.4), 1.0);
+}
+`;
+  const F_DISK = F_HEAD + COLOUR + `
+varying vec2 vW;
+varying vec3 vV;
+uniform vec3 uN;          // the plane's up, in view space
+uniform float uNep, uSpin, uAlpha;
+uniform sampler2D uDust;
+float shade(vec2 w);
+void main() {
+  float r = length(vW), rn = r / uNep;
+  if (rn > 1.32) discard;
+  // the swirl: arcs wound a little into a spiral, the inner ones turning faster.
+  // (two lookups, each smooth where the other's angle jumps, as on the globes)
+  float th = atan(vW.y, vW.x);
+  float wind = 0.9 * log(1.0 + rn * 12.0) - uSpin / (0.25 + rn);
+  float v = rn / 1.32;
+  float d1 = texture2D(uDust, vec2((th + wind) / TAU, v)).r;
+  float d2 = texture2D(uDust, vec2((atan(-vW.y, -vW.x) + PI + wind) / TAU, v)).r;
+  float dens = mix(d1, d2, smoothstep(0.55, 0.95, abs(th) / PI)) * 1.4;
   // sunlit: bright near the Sun, a long faint reach, then the dark
   float lit = 1.5 * exp(-rn * 6.5) + 0.85 * exp(-rn * 2.3) + 0.10;
   float edge = (1.0 - smoothstep(0.72, 1.3, rn)) * smoothstep(0.0, 0.025, rn);
@@ -2039,6 +2055,33 @@ void main() {
     return out;
   }
 
+  // the dust disk's picture, drawn once by the GPU: 1024 by 512, 2 MB (and its smaller copies)
+  function bakeDust() {
+    const w = 1024, h = 512;
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    texParams(false, true);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    if (ok) {
+      gl.viewport(0, 0, w, h);
+      gl.disable(gl.BLEND);
+      use(PR.diskBake);
+      quad1();
+      gl.enable(gl.BLEND);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(fb);
+    if (!ok) { gl.deleteTexture(t); return null; }
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    texParams(true, true);
+    return t;
+  }
+
   function buffer(data) {
     const b = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, b);
@@ -2066,6 +2109,7 @@ void main() {
       program('glow', V_BODY, F_GLOW, ['aCorner']);
       program('bloom', V_BODY, F_BLOOM, ['aCorner']);
       program('disk', V_DISK, F_DISK, ['aCorner']);
+      program('diskBake', V_FULL, F_DISKBAKE, ['aCorner']);
       program('ring', V_RING, F_RING, ['aCorner']);
       program('tail', V_TAIL, F_TAIL, ['aCorner']);
       program('sky', V_FULL, F_SKY, ['aCorner']);
@@ -2115,6 +2159,7 @@ void main() {
       if (b.ring) b.ring.tex = ringTex(b.ring.key, b.ring);
     }
     TX.none = dataTex(1, 1, new Uint8Array([0, 0, 0, 0]), gl.RGBA, false, false);
+    TX.dust = bakeDust();
     TX.sky = mapTex('milkyway', [0, 0, 0], true);
     GLOK = true;
     return true;
@@ -3108,7 +3153,7 @@ void main() {
 
   // how much of the dust disk shows: none on the journey (the plane is going
   // somewhere), none beside a single world or out among the stars
-  const diskK = () => SUN.shown
+  const diskK = () => SUN.shown && TX.dust
     ? (1 - journeyK) * smooth(lg(0.25), lg(2.5), lg(dist)) * (1 - smooth(lg(160), lg(520), lg(dist)))
     : 0;
   function drawDisk(k) {
@@ -3120,6 +3165,7 @@ void main() {
     u1('uR', nep * 1.34); u1('uNep', nep);
     u1('uSpin', REDUCED ? 0 : realT * 0.006);
     u1('uAlpha', k);
+    gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, TX.dust); ui('uDust', 6);
     quad1();
   }
 
