@@ -3316,7 +3316,8 @@ void main() {
     u3('uRt', cam.rt); u3('uUp', cam.up); u3('uFw', cam.fw); u3('uCam', cam.pos);
     u3('uMap', [MAP_K, MAP_R0, mapM]);
     u3('uSunV', SUN.v);
-    u1('uT', jd - JD0); u1('uInvF', 1 / cam.F);
+    // (sizes are for a wide screen: on a phone the same system is drawn smaller, and so are the stones)
+    u1('uT', jd - JD0); u1('uInvF', 0.62 * clamp(Math.min(W, H) / 820, 0.48, 1.1) / cam.F);
     u1('uDrift', REDUCED ? 0 : realT * 0.004);
     u1('uSpin', REDUCED ? 0 : realT);
     u1('uAlpha', k);
