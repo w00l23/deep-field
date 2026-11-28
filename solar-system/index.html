@@ -1040,6 +1040,13 @@ uniform vec4 uLook;       // gain, gamma, roughness (1 airless rock .. 0 cloud t
 uniform float uLimb;
 uniform vec3 uFar, uEmber;
 uniform vec3 uSunTint;    // the colour of the sunlight: a little warm, as a painter sees it (white for the real look)
+uniform float uPaint;     // 0 the true colours .. 1 a painter's: bands deeper, colours richer
+vec3 painted(vec3 alb) {
+  float m = dot(alb, vec3(0.30, 0.59, 0.11));
+  vec3 c = mix(vec3(m), alb, 1.0 + 0.18 * uPaint);           // richer
+  c = m + (c - m) * (1.0 + 0.28 * uPaint);                   // and deeper bands
+  return max(c * (1.0 + 0.06 * uPaint), 0.0);
+}
 // a rough airless ground scatters back toward the Sun: the full Moon is
 // nearly as bright at its edge as in its middle. Cloud tops darken to the limb.
 float lightOn(float mu0, float mu, float rough) {
@@ -1050,6 +1057,7 @@ float lightOn(float mu0, float mu, float rough) {
   return l * smoothstep(mix(-0.06, 0.0, rough), mix(0.22, 0.05, rough), mu0);
 }
 vec3 lit(vec3 alb, float mu0, float mu, float sun) {
+  alb = painted(alb);
   alb = mix(alb, toLinear(uFar), uFill * 0.85);
   float whole = lightOn(mu0, mu, uLook.z);
   float l = whole * sun;
@@ -1402,7 +1410,25 @@ void main() {
   float a = clamp(dens * (0.18 + 0.42 * exp(-rn * 1.4)) * thick * edge, 0.0, 0.75) * 0.55;
   gl_FragColor = vec4(max(col + dither(gl_FragCoord.xy) / 255.0 * edge, 0.0), a) * uAlpha;
 }
-float shade(vec2 w) { return 1.0; }
+// the long soft shadows the worlds lay on the dust, straight away from the Sun.
+// Each: where the world stands (from the Sun), how wide it is drawn, how much it shows
+uniform vec4 uSh[8];
+float shade(vec2 w) {
+  float s = 1.0;
+  for (int i = 0; i < 8; i++) {
+    vec4 o = uSh[i];
+    if (o.w <= 0.0) continue;
+    float lc = length(o.xy);
+    vec2 dir = o.xy / max(lc, 1e-5), rel = w - o.xy;
+    float along = dot(rel, dir);
+    if (along <= -o.z) continue;
+    float perp = abs(rel.x * dir.y - rel.y * dir.x);
+    float wide = o.z * (1.0 + max(along, 0.0) / (o.z * 26.0));   // the shadow softens and spreads as it goes
+    float k = (1.0 - smoothstep(wide * 0.45, wide * 1.2, perp)) * smoothstep(-o.z * 0.6, o.z * 0.8, along) * exp(-max(along, 0.0) / (o.z * 18.0));
+    s *= 1.0 - 0.85 * k * o.w;
+  }
+  return s;
+}
 `;
 
   // a soft light, added: the glow that lets a two-pixel planet be seen
@@ -3033,6 +3059,7 @@ void main() {
     u1('uHalo', b.fill > 0.6 ? 0 : (L.halo || 0));
     u3('uFar', b.c);
     u3('uSunTint', skyOn ? [1, 1, 1] : SUN_TINT);
+    u1('uPaint', skyOn ? 0 : (PAINT[b.key] || 0) * artK);
     const at = L.atmo || [0, 0, 0, 0], rim = L.rim || [5, 0.3, 0.5];
     u4('uAtmo', at[0], at[1], at[2], at[3] * (1 - b.fill));
     u3('uRim', rim);
@@ -3108,7 +3135,7 @@ void main() {
     u1('uPx', (b.dd / (cam.F * RES)) / rd);
     u1('uSunAng', SUN.r / Math.max(b.helio, 0.01));
     u1('uAlpha', b.vis * (R.key === 'saturn' ? 1 : 1 - b.fill));     // Uranus's threads are not seen from afar
-    u1('uGain', R.key === 'saturn' ? 1.25 : 0.5);
+    u1('uGain', R.key === 'saturn' ? 1.25 + 0.2 * artK * (skyOn ? 0 : 1) : 0.5);
     u4('uRing', R.in, R.out, 1, 0);
     gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, R.tex); ui('uRingTex', 3);
     quad1();
@@ -3135,6 +3162,10 @@ void main() {
 
   // the bloom: sized on the screen by how large the Sun is drawn, gone when the Sun is only a point
   const SUN_TINT = [1.0, 0.95, 0.87];
+  // how far each world's colours are pushed toward the painting (the giants most: their bands are the look)
+  const PAINT = { jupiter: 1, saturn: 0.6, mars: 0.6, venus: 0.4, mercury: 0.4, uranus: 0.5, neptune: 0.6 };
+  // 1 the painting, 0 the real look (the pill for it comes with the toggle)
+  let artK = 1;
   function drawBloom() {
     const b = SUN;
     if (!b.shown || b.vis < 0.01) return;
@@ -3166,8 +3197,17 @@ void main() {
     u1('uSpin', REDUCED ? 0 : realT * 0.006);
     u1('uAlpha', k);
     gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, TX.dust); ui('uDust', 6);
+    const sh = _sh;
+    sh.fill(0);
+    PLANETS.forEach((b, i) => {
+      if (!b.shown || b.vis < 0.01) return;
+      sh[i * 4] = b.dp[0] - SUN.dp[0]; sh[i * 4 + 1] = b.dp[2] - SUN.dp[2];
+      sh[i * 4 + 2] = b.rd * (b.ring ? 1.5 : 1); sh[i * 4 + 3] = b.vis * artK;
+    });
+    gl.uniform4fv(PR.disk.u.uSh, sh);
     quad1();
   }
+  const _sh = new Float32Array(32);
 
   function drawShell(k) {
     const R = mapR(HELIOPAUSE), v = SUN.v, dd = SUN.dd;
