@@ -1422,8 +1422,10 @@ float shade(vec2 w) {
     vec2 dir = o.xy / max(lc, 1e-5), rel = w - o.xy;
     float along = dot(rel, dir);
     if (along <= -o.z) continue;
+    if (along > o.z * 60.0) continue;                            // (gone by then: exp(-60/18))
     float perp = abs(rel.x * dir.y - rel.y * dir.x);
     float wide = o.z * (1.0 + max(along, 0.0) / (o.z * 26.0));   // the shadow softens and spreads as it goes
+    if (perp > wide * 1.2) continue;
     float k = (1.0 - smoothstep(wide * 0.45, wide * 1.2, perp)) * smoothstep(-o.z * 0.6, o.z * 0.8, along) * exp(-max(along, 0.0) / (o.z * 18.0));
     s *= 1.0 - 0.85 * k * o.w;
   }
