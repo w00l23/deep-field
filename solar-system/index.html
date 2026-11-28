@@ -1039,6 +1039,7 @@ void main() {
 uniform vec4 uLook;       // gain, gamma, roughness (1 airless rock .. 0 cloud tops), fine detail
 uniform float uLimb;
 uniform vec3 uFar, uEmber;
+uniform vec3 uSunTint;    // the colour of the sunlight: a little warm, as a painter sees it (white for the real look)
 // a rough airless ground scatters back toward the Sun: the full Moon is
 // nearly as bright at its edge as in its middle. Cloud tops darken to the limb.
 float lightOn(float mu0, float mu, float rough) {
@@ -1055,7 +1056,7 @@ vec3 lit(vec3 alb, float mu0, float mu, float sun) {
   l *= mix(1.0, 0.35 + 0.65 * pow(mu, 0.5), uLimb * (1.0 - uFill));
   // inside the shadow of a world with air, the only light is what its air
   // bends round it: every sunrise and sunset of that world at once, and red
-  return alb * (l + 0.012 + 0.2 * uFill) + alb * uEmber * whole * (1.0 - sun);
+  return alb * (l * uSunTint + 0.012 + 0.2 * uFill) + alb * uEmber * whole * (1.0 - sun);
 }
 `;
 
@@ -1220,6 +1221,8 @@ void main() {
     float spots = smoothstep(0.66, 0.70, sp) * 0.35 + smoothstep(0.70, 0.74, sp) * 0.45;
     float limb = 0.40 + 0.60 * pow(mu, 0.55);
     vec3 face = mix(vec3(1.0, 0.50, 0.14), vec3(1.0, 0.92, 0.72), pow(mu, 0.6)) * limb;
+    // a white-hot heart, the way the eye (and a painting) sees the middle of a star
+    face = mix(face, vec3(1.0, 0.97, 0.90) * 1.12, pow(mu, 3.0) * 0.38);
     face *= 1.0 + ((gran - 0.5) * 0.42 + (cell - 0.5) * 0.26) * fine;
     face *= 1.0 - spots * fine;
     // bright ragged patches near the edge
@@ -1314,6 +1317,23 @@ void main() {
   vec3 col = toLinear(t.rgb) * I * lit + toLinear(t.rgb) * 0.004;
   float a = (1.0 - exp(-tau / muV)) * seen * uAlpha;
   gl_FragColor = vec4(toScreen(col) * seen * uAlpha, a);
+}
+`;
+
+  // the Sun's bloom: a wide soft warm light laid round it, under the worlds,
+  // so the whole middle of the system reads as lit. It breathes, slowly and
+  // only a little (and not at all with Reduce Motion).
+  const F_BLOOM = F_HEAD + COLOUR + `
+varying vec2 vQ;
+uniform vec3 uColor, uCore;
+uniform float uGlow;
+void main() {
+  float q = length(vQ);
+  if (q >= 1.0) discard;
+  float wide = exp(-q * 4.2), near = exp(-q * q * 26.0);
+  float g = (0.62 * wide + 0.55 * near) * (1.0 - smoothstep(0.62, 1.0, q));
+  vec3 c = mix(uColor, uCore, near) * g * uGlow;
+  gl_FragColor = vec4(max(c + dither(gl_FragCoord.xy) / 255.0 * step(0.002, g), 0.0), 0.0);
 }
 `;
 
@@ -1992,6 +2012,7 @@ void main() {
       program('rock', V_BODY, F_ROCK, ['aCorner']);
       program('sun', V_BODY, F_SUN, ['aCorner']);
       program('glow', V_BODY, F_GLOW, ['aCorner']);
+      program('bloom', V_BODY, F_BLOOM, ['aCorner']);
       program('ring', V_RING, F_RING, ['aCorner']);
       program('tail', V_TAIL, F_TAIL, ['aCorner']);
       program('sky', V_FULL, F_SKY, ['aCorner']);
@@ -2913,6 +2934,7 @@ void main() {
     u1('uSunAng', SUN.r / Math.max(b.helio, 0.01));
     u1('uHalo', b.fill > 0.6 ? 0 : (L.halo || 0));
     u3('uFar', b.c);
+    u3('uSunTint', skyOn ? [1, 1, 1] : SUN_TINT);
     const at = L.atmo || [0, 0, 0, 0], rim = L.rim || [5, 0.3, 0.5];
     u4('uAtmo', at[0], at[1], at[2], at[3] * (1 - b.fill));
     u3('uRim', rim);
@@ -3010,6 +3032,24 @@ void main() {
     u1('uReach', far);
     u1('uGlow', mix(0.8, 0.62, b.fill));
     u1('uAlpha', b.vis);
+    quad1();
+  }
+
+  // the bloom: sized on the screen by how large the Sun is drawn, gone when the Sun is only a point
+  const SUN_TINT = [1.0, 0.95, 0.87];
+  function drawBloom() {
+    const b = SUN;
+    if (!b.shown || b.vis < 0.01) return;
+    const short = Math.min(W, H);
+    const R = Math.max(b.pr * 2.4, clamp(b.pr * 22, 40, 0.62 * short));
+    const k = smooth(2.6, 7, b.pr) * (1 - 0.6 * smooth(80, 420, b.pr)) * b.vis;
+    if (k < 0.003) return;
+    const breathe = REDUCED ? 1 : 1 + 0.045 * Math.sin(realT * TAU / 11);
+    use(PR.bloom);
+    const r = R * b.dd / cam.F;
+    u3('uC', b.v); u1('uR', r); u1('uHalf', r);
+    u3('uColor', [0.62, 0.36, 0.15]); u3('uCore', [1.0, 0.80, 0.52]);
+    u1('uGlow', 0.78 * k * breathe);
     quad1();
   }
 
@@ -3217,7 +3257,8 @@ void main() {
     }
 
     // the bodies, farthest first
-    for (const p of [PR.tex, PR.earth, PR.band, PR.rock, PR.sun, PR.glow, PR.ring, PR.tail]) lens(p);
+    for (const p of [PR.tex, PR.earth, PR.band, PR.rock, PR.sun, PR.glow, PR.ring, PR.tail, PR.bloom]) lens(p);
+    drawBloom();
     for (const b of order) {
       if (b === SUN) { drawSun(b); continue; }
       if (b.kind === 'comet') {
