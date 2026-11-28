@@ -93,11 +93,12 @@
     ?date=2027-08-02T10:07Z   any moment from the year 1000 to 3000
     ?visit=saturn             arrive beside a body (any name in the table of bodies; voyager1 is one)
     ?true=1   ?journey=1   ?still=1   ?lang=es   ?az= ?el= ?dist= (au)   ?ly= (light-years)
+    ?look=real   ?look=art      the painting's look (dust disk, shadows, warm light) or only what is real
     ?sky=1                    stand on the ground and look up (with ?date= at that moment, else tonight)
     ?lat=29.76&lon=-95.37     from where (degrees, north and east)
     ?gl=0 (the canvas 2D fallback)
     keys: arrows turn, + and - come closer, space pauses, 1-8 visit a planet, 0 the Sun, g the journey,
-          e the next eclipse, n the nearest stars, s your sky tonight, Esc home
+          e the next eclipse, n the nearest stars, s your sky tonight, a art · real, Esc home
     window.__solar            the same, for scripts: visit, home, far, date, pause, look, journey, eclipses,
                               where, marks, trail, state, cost, sky, place, above, crosses
 
@@ -206,6 +207,11 @@
   .pace .pill:last-child{border-radius:0 999px 999px 0;padding:0 .85rem 0 .7rem}
   .pace .pill:active{transform:none;background:rgba(74,70,130,.5)}
   #paceLabel{min-width:7.6rem;justify-content:center}
+  /* art · real: the same two halves as the pace pill */
+  .look .pill{min-width:3.4rem;justify-content:center}
+  .look .pill:first-child{padding:0 .6rem 0 .8rem}
+  .look .pill:last-child{padding:0 .8rem 0 .6rem}
+  .look[hidden]{display:none}
   .sign{font-family:Georgia,serif;font-size:1rem;line-height:1;opacity:.85}
 
   #home{
@@ -266,7 +272,7 @@
      and the one that says where the ground is comes out */
   #placePill{display:none}
   body.sky #placePill{display:inline-flex}
-  body.sky #scale,body.sky #journey,body.sky #eclipse,body.sky #out{display:none}
+  body.sky #scale,body.sky #journey,body.sky #eclipse,body.sky #out,body.sky #look{display:none}
   /* (the list itself is the browser's own, laid unseen over the pill: at
      16px, so that a phone does not zoom the page to show it) */
   #placePill select{
@@ -327,6 +333,10 @@
   <button class="pill" id="date" type="button" aria-label="Date shown. Tap to come back to today."></button>
   <button class="pill" id="ourDay" type="button" aria-label="Pick a day to remember and see its sky">&#9825;</button>
   <input type="date" id="dayPick" min="1000-01-01" max="2999-12-31" tabindex="-1" aria-hidden="true">
+  <span class="pace look" id="look" role="group" aria-label="Look: like the painting, or only what is real">
+    <button class="pill" id="lookArt" type="button" aria-pressed="true" data-en="art" data-es="arte">art</button>
+    <button class="pill" id="lookReal" type="button" aria-pressed="false" data-en="real" data-es="real">real</button>
+  </span>
   <span class="pace" role="group" aria-label="Pace of time">
     <button class="pill" id="slower" type="button" aria-label="Slower"><span class="sign">−</span></button>
     <button class="pill" id="paceLabel" type="button" aria-label="Pause or play"></button>
@@ -3158,7 +3168,7 @@ void main() {
     u1('uSunAng', SUN.r / Math.max(b.helio, 0.01));
     u1('uHalo', b.fill > 0.6 ? 0 : (L.halo || 0));
     u3('uFar', b.c);
-    u3('uSunTint', skyOn ? [1, 1, 1] : SUN_TINT);
+    u3('uSunTint', skyOn ? [1, 1, 1] : [mix(1, SUN_TINT[0], artK), mix(1, SUN_TINT[1], artK), mix(1, SUN_TINT[2], artK)]);
     u1('uPaint', skyOn ? 0 : (PAINT[b.key] || 0) * artK);
     const at = L.atmo || [0, 0, 0, 0], rim = L.rim || [5, 0.3, 0.5];
     u4('uAtmo', at[0], at[1], at[2], at[3] * (1 - b.fill));
@@ -3264,8 +3274,11 @@ void main() {
   const SUN_TINT = [1.0, 0.95, 0.87];
   // how far each world's colours are pushed toward the painting (the giants most: their bands are the look)
   const PAINT = { jupiter: 1, saturn: 0.6, mars: 0.6, venus: 0.4, mercury: 0.4, uranus: 0.5, neptune: 0.6 };
-  // 1 the painting, 0 the real look (the pill for it comes with the toggle)
-  let artK = 1;
+  // 1 the painting, 0 the real look: art · real, by the date. Kept in this browser; ?look=real or ?look=art in a link
+  let artOn = true;
+  try { artOn = localStorage.getItem('deepfield.solar.look') !== 'real'; } catch (e) {}
+  if (QS.get('look') === 'real') artOn = false; else if (QS.get('look') === 'art') artOn = true;
+  let artK = artOn ? 1 : 0;
   function drawBloom() {
     const b = SUN;
     if (!b.shown || b.vis < 0.01) return;
@@ -3454,7 +3467,7 @@ void main() {
 
     // the dust disk, under everything that stands on it
     const disk = diskK();
-    if (disk > 0.003) { lens(PR.disk); drawDisk(disk); }
+    if (disk * artK > 0.003) { lens(PR.disk); drawDisk(disk * artK); }
 
     // the small bodies
     lens(PR.belt);
@@ -3802,6 +3815,7 @@ void main() {
     else if (k === 'e' || k === 'E') $('eclipse').click();
     else if (k === 'n' || k === 'N') elOut.click();
     else if (k === 's' || k === 'S') elSky.click();
+    else if ((k === 'a' || k === 'A') && !$('look').hidden) setLook(!artOn);
     else if (k >= '0' && k <= '8') { const b = k === '0' ? SUN : PLANETS[+k - 1]; choose(b); visit(b); }
     else return;
     e.preventDefault(); fadeHint();
@@ -4291,6 +4305,17 @@ void main() {
     elScale.setAttribute('aria-pressed', mapTo ? 'true' : 'false');
   });
   elScale.setAttribute('aria-pressed', mapTo ? 'true' : 'false');
+  // art · real: the painting's dust disk and the shadows on it, the warm light and richer colours; or only what is real
+  function setLook(on) {
+    artOn = !!on;
+    $('lookArt').setAttribute('aria-pressed', artOn ? 'true' : 'false');
+    $('lookReal').setAttribute('aria-pressed', artOn ? 'false' : 'true');
+    try { localStorage.setItem('deepfield.solar.look', artOn ? 'art' : 'real'); } catch (e) {}
+  }
+  $('lookArt').addEventListener('click', () => setLook(true));
+  $('lookReal').addEventListener('click', () => setLook(false));
+  $('lookArt').setAttribute('aria-pressed', artOn ? 'true' : 'false');
+  $('lookReal').setAttribute('aria-pressed', artOn ? 'false' : 'true');
   // the two switches are separate. The road is always true, 48.5 au a year;
   // how far each world stands from the Sun, and so how wide its corkscrew is
   // drawn, is eased or true as the other pill says.
@@ -4390,6 +4415,8 @@ void main() {
       journeyK = ease(journeyT);
     }
     jK = journeyK * (1 - smooth(lg(1200), lg(5000), lg(dist)));
+    const aTo = artOn ? 1 : 0;
+    if (artK !== aTo) artK = REDUCED ? aTo : clamp(artK + Math.sign(aTo - artK) * dt / 700, 0, 1);
     place(jd);
     if (!dragging) {
       if (skyOn) { skyAz += vAz * dt; skyAlt = clamp(skyAlt + vEl * dt, SKY_LOW, SKY_HIGH); }
@@ -4488,6 +4515,9 @@ void main() {
     cv2.setAttribute('aria-hidden', 'true');
     cv.parentNode.insertBefore(cv2, cv.nextSibling);
     ctx = cv2.getContext('2d');
+    // (the canvas drawing has no disk to take away)
+    $('look').hidden = true;
+    barRows();
   }
   resize(); readInsets();
   place(jd);
@@ -4511,6 +4541,8 @@ void main() {
     marks: () => MARKS.map(m => ({ key: m.key, x: m.px, y: m.py, seen: m.vis, named: m.on, at: m.on > 0.02 ? [m.lx, m.ly, m.w, m.h] : null, ly: m.far || 0 })),
     date: d => { if (d !== undefined) { const t = typeof d === 'number' ? d : Date.parse(d); if (isFinite(t)) { jd = jdOf(t); atNow = false; } } return new Date(msOf(jd)); },
     pause: p => { setPaused(p !== false); return paused; },
+    // art · real: art(false) the real look, art(true) the painting
+    art: on => { if (on !== undefined) setLook(on); return artOn ? 'art' : 'real'; },
     trueDistances: on => { mapTo = on ? 1 : 0; elScale.setAttribute('aria-pressed', on ? 'true' : 'false'); },
     journey: on => { setJourney(on !== false); showJourney(); return journey; },
     // the eclipses this page finds, from a date on: for checking them against an almanac
