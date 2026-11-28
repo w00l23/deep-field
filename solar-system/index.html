@@ -1384,7 +1384,7 @@ void main() {
 varying vec2 vW;
 varying vec3 vV;
 uniform vec3 uN;          // the plane's up, in view space
-uniform float uNep, uSpin, uAlpha;
+uniform float uNep, uSpin, uAlpha, uGain;
 uniform sampler2D uDust;
 float shade(vec2 w);
 void main() {
@@ -1406,7 +1406,7 @@ void main() {
   float mu = abs(dot(normalize(vV), uN));
   float thick = min(1.0 / (0.32 + 0.68 * mu), 2.4);
   float sh = shade(vW);
-  vec3 col = tone * lit * dens * thick * edge * sh * 0.5;
+  vec3 col = tone * lit * dens * thick * edge * sh * 0.5 * uGain;
   float a = clamp(dens * (0.18 + 0.42 * exp(-rn * 1.4)) * thick * edge, 0.0, 0.75) * 0.55;
   gl_FragColor = vec4(max(col + dither(gl_FragCoord.xy) / 255.0 * edge, 0.0), a) * uAlpha;
 }
@@ -1679,6 +1679,62 @@ void main() {
 }
 `;
 
+  // the rocks: a few hundred small stones scattered over the plane, each a
+  // little twelve-cornered rock that tumbles. One mesh, drawn once per rock in
+  // a single instanced call. Each goes round the Sun on its own orbit (the
+  // belt's ones where the belt is, the rest spread out) and drifts on a
+  // little even while time stands still. Like the disk, they are for the
+  // look: the belts' true shape is the swarm of points above.
+  const V_ROCK = V_HEAD + MAPR + `
+attribute vec3 aPos, aNor;
+attribute vec4 aEl1;      // a, e, i, node
+attribute vec4 aEl2;      // argument of perihelion, mean anomaly at the epoch, mean motion, size in pixels
+attribute vec4 aSp;       // spin axis, how fast it tumbles
+attribute vec4 aSc;       // its three widths, and its tone
+uniform float uT, uDrift, uSpin, uInvF;
+uniform vec3 uCam, uRt, uUp, uFw, uSunV;
+varying vec3 vN, vL;
+varying float vTone, vNear;
+vec3 spin(vec3 v, vec3 k, float a) { float c = cos(a), s = sin(a); return v * c + cross(k, v) * s + k * dot(k, v) * (1.0 - c); }
+void main() {
+  float e = aEl1.y;
+  float M = mod(aEl2.y + aEl2.z * uT + uDrift * inversesqrt(aEl1.x) * inversesqrt(aEl1.x) * inversesqrt(aEl1.x), 6.2831853);
+  float E = M + e * sin(M);
+  for (int k = 0; k < 3; k++) E -= (E - e * sin(E) - M) / (1.0 - e * cos(E));
+  float x = aEl1.x * (cos(E) - e), y = aEl1.x * sqrt(1.0 - e * e) * sin(E);
+  float cw = cos(aEl2.x), sw = sin(aEl2.x), cO = cos(aEl1.w), sO = sin(aEl1.w), ci = cos(aEl1.z), si = sin(aEl1.z);
+  vec3 ecl = vec3((cw * cO - sw * sO * ci) * x + (-sw * cO - cw * sO * ci) * y,
+                  (cw * sO + sw * cO * ci) * x + (-sw * sO + cw * cO * ci) * y,
+                  (sw * si) * x + (cw * si) * y);
+  vec3 p = vec3(ecl.x, ecl.z, -ecl.y);
+  float r = length(p);
+  p *= mapR(r) / r;
+  vec3 rel = p - uCam;
+  vec3 c = vec3(dot(rel, uRt), dot(rel, uUp), dot(rel, uFw));
+  vec3 axis = normalize(aSp.xyz);
+  float ang = aSc.w * 40.0 + uSpin * aSp.w;
+  // as many pixels across wherever it is: a stone, never a boulder
+  float size = aEl2.w * max(c.z, uNear) * uInvF;
+  vec3 v = c + spin(aPos * aSc.xyz, axis, ang) * size;
+  vN = spin(normalize(aNor / aSc.xyz), axis, ang);
+  vL = normalize(uSunV - c);
+  vTone = aSc.w;
+  vNear = 1.0 / (0.4 + mapR(r) / uMap.x * 0.35);
+  gl_Position = c.z > uNear ? clip(v) : vec4(0.0, 0.0, -2.0, 1.0);
+}
+`;
+  const F_ROCKS = F_HEAD + COLOUR + `
+varying vec3 vN, vL;
+varying float vTone, vNear;
+uniform float uAlpha;
+void main() {
+  vec3 alb = mix(vec3(0.46, 0.38, 0.31), vec3(0.62, 0.56, 0.50), vTone);
+  float l = max(dot(normalize(vN), vL), 0.0);
+  vec3 col = toLinear(alb) * (0.025 + 1.25 * l * min(vNear, 2.0));
+  gl_FragColor = vec4(toScreen(col), 1.0) * uAlpha;
+}
+`;
+
   // an orbit's line. Each vertex is an angle back along the orbit from where
   // the body is now, crowded close to the body, so the line passes through
   // the body's centre at any magnification and is brightest just behind it.
@@ -1795,7 +1851,8 @@ void main() {
 `;
 
   // --- the machinery -------------------------------------------------
-  let gl = null, GLOK = false;
+  let gl = null, GLOK = false, INST = null, rockBuf = null, rockMesh = null, rockN = 0;
+  const ROCK_TRIS = 20;
   const PR = {}, TX = {};
   let quadBuf = null, orbitBuf = null, trailBuf = null, starBuf = null, beltBuf = null, kuiperBuf = null, oortBuf = null;
   const ORBIT_N = 220, TRAIL_N = 640;
@@ -2110,6 +2167,43 @@ void main() {
     return t;
   }
 
+  // one stone: an icosahedron with its corners pushed in and out, flat-faced
+  function makeRockMesh() {
+    const t = (1 + Math.sqrt(5)) / 2, rnd = rng(77);
+    const V = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]]
+      .map(v => { const l = len(v), k = (0.72 + 0.4 * rnd()) / l; return [v[0] * k, v[1] * k, v[2] * k]; });
+    const F = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+      [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
+    const out = new Float32Array(ROCK_TRIS * 3 * 6);
+    let k = 0;
+    for (const f of F) {
+      const a = V[f[0]], b = V[f[1]], c = V[f[2]];
+      const n = unit(cross([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]], [0, 0, 0]), [0, 0, 0]);
+      for (const v of [a, b, c]) { out.set(v, k); out.set(n, k + 3); k += 6; }
+    }
+    return out;
+  }
+  // where the stones are: most in the belt, the rest scattered thin over the whole plane, a few big ones
+  function makeRocks() {
+    const rnd = rng(2611), BELT = 640, SPREAD = 760;
+    const out = new Float32Array((BELT + SPREAD) * 16);
+    const ray = s => s * Math.sqrt(-2 * Math.log(1 - rnd() * 0.999));
+    let k = 0;
+    for (let j = 0; j < BELT + SPREAD; j++) {
+      const inBelt = j < BELT;
+      const a = inBelt ? 2.1 + 1.2 * rnd() : 0.45 * Math.pow(36 / 0.45, Math.pow(rnd(), 0.8));
+      const e = Math.min(0.25, ray(inBelt ? 0.08 : 0.05)), i = Math.min(inBelt ? 20 : 6, ray(inBelt ? 5 : 1.6)) * D2R;
+      const big = rnd() < 0.04;
+      const px = big ? 4.2 + 2.6 * rnd() : 1.1 + 2.4 * Math.pow(rnd(), 1.8);
+      out[k++] = a; out[k++] = e; out[k++] = i; out[k++] = rnd() * TAU;
+      out[k++] = rnd() * TAU; out[k++] = rnd() * TAU; out[k++] = GAUSS_K / Math.pow(a, 1.5); out[k++] = px;
+      out[k++] = rnd() - 0.5; out[k++] = rnd() - 0.5; out[k++] = rnd() - 0.5; out[k++] = 0.15 + 0.5 * rnd();
+      out[k++] = 0.8 + 0.5 * rnd(); out[k++] = 0.6 + 0.4 * rnd(); out[k++] = 0.55 + 0.35 * rnd(); out[k++] = rnd();
+    }
+    rockN = BELT + SPREAD;
+    return out;
+  }
+
   function buffer(data) {
     const b = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, b);
@@ -2138,6 +2232,7 @@ void main() {
       program('bloom', V_BODY, F_BLOOM, ['aCorner']);
       program('disk', V_DISK, F_DISK, ['aCorner']);
       program('diskBake', V_FULL, F_DISKBAKE, ['aCorner']);
+      program('rocks', V_ROCK, F_ROCKS, ['aPos', 'aNor', 'aEl1', 'aEl2', 'aSp', 'aSc']);
       program('ring', V_RING, F_RING, ['aCorner']);
       program('tail', V_TAIL, F_TAIL, ['aCorner']);
       program('sky', V_FULL, F_SKY, ['aCorner']);
@@ -2178,6 +2273,9 @@ void main() {
     beltBuf = buffer(makeBelt());
     kuiperBuf = buffer(makeKuiper());
     oortBuf = buffer(makeOort());
+    // (the rocks need instancing; nearly every WebGL has it, and without it they are simply not there)
+    INST = gl.getExtension('ANGLE_instanced_arrays');
+    if (INST) { rockMesh = buffer(makeRockMesh()); rockBuf = buffer(makeRocks()); }
 
     for (const b of B) {
       const L = b.look;
@@ -3199,6 +3297,8 @@ void main() {
     u1('uSpin', REDUCED ? 0 : realT * 0.006);
     u1('uAlpha', k);
     gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, TX.dust); ui('uDust', 6);
+    // close in, the bright middle would fill the screen: let it down
+    u1('uGain', mix(0.42, 1, smooth(lg(5), lg(40), lg(dist))));
     const sh = _sh;
     sh.fill(0);
     PLANETS.forEach((b, i) => {
@@ -3210,6 +3310,28 @@ void main() {
     quad1();
   }
   const _sh = new Float32Array(32);
+
+  function drawRocks(k) {
+    use(PR.rocks);
+    u3('uRt', cam.rt); u3('uUp', cam.up); u3('uFw', cam.fw); u3('uCam', cam.pos);
+    u3('uMap', [MAP_K, MAP_R0, mapM]);
+    u3('uSunV', SUN.v);
+    u1('uT', jd - JD0); u1('uInvF', 1 / cam.F);
+    u1('uDrift', REDUCED ? 0 : realT * 0.004);
+    u1('uSpin', REDUCED ? 0 : realT);
+    u1('uAlpha', k);
+    gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
+    for (let i = 1; i < 6; i++) gl.enableVertexAttribArray(i);
+    gl.bindBuffer(gl.ARRAY_BUFFER, rockMesh);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+    gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+    gl.bindBuffer(gl.ARRAY_BUFFER, rockBuf);
+    for (let i = 0; i < 4; i++) { gl.vertexAttribPointer(2 + i, 4, gl.FLOAT, false, 64, i * 16); INST.vertexAttribDivisorANGLE(2 + i, 1); }
+    INST.drawArraysInstancedANGLE(gl.TRIANGLES, 0, ROCK_TRIS * 3, rockN);
+    for (let i = 2; i < 6; i++) INST.vertexAttribDivisorANGLE(i, 0);
+    for (let i = 1; i < 6; i++) gl.disableVertexAttribArray(i);
+    gl.disable(gl.CULL_FACE);
+  }
 
   function drawShell(k) {
     const R = mapR(HELIOPAUSE), v = SUN.v, dd = SUN.dd;
@@ -3417,6 +3539,9 @@ void main() {
         if (b.shown && b.vis > 0.01) line(b, jd - CRAFT[b.craft][6], false, b.c, 0.30 * (1 - jK) * b.vis);
       }
     }
+
+    // the stones on the plane
+    if (INST && disk > 0.003) { lens(PR.rocks); drawRocks(disk); }
 
     // the bodies, farthest first
     for (const p of [PR.tex, PR.earth, PR.band, PR.rock, PR.sun, PR.glow, PR.ring, PR.tail, PR.bloom]) lens(p);
