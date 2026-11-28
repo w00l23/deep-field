@@ -1337,6 +1337,58 @@ void main() {
 }
 `;
 
+  // the dust disk: a painter's plane of dust in the plane of the planets,
+  // glowing where the Sun is near and fading out to the dark past Neptune.
+  // It is not a thing anyone has seen (the real dust is far too thin): it is
+  // there for the look, and the "real" look takes it away. One flat square,
+  // drawn in the same eased (or true) distances as the orbits.
+  const V_DISK = V_HEAD + `
+attribute vec2 aCorner;
+uniform vec3 uO, uRt, uUp, uFw;
+uniform float uR;
+varying vec2 vW;
+varying vec3 vV;
+void main() {
+  vW = aCorner * uR;
+  vec3 p = uO + vec3(vW.x, 0.0, vW.y);
+  vV = vec3(dot(p, uRt), dot(p, uUp), dot(p, uFw));
+  gl_Position = clip(vV);
+}
+`;
+  const F_DISK = F_HEAD + NOISE + COLOUR + `
+varying vec2 vW;
+varying vec3 vV;
+uniform vec3 uN;          // the plane's up, in view space
+uniform float uNep, uSpin, uAlpha;
+float shade(vec2 w);
+void main() {
+  float r = length(vW), rn = r / uNep;
+  if (rn > 1.32) discard;
+  float th = atan(vW.y, vW.x);
+  // the swirl: arcs wound a little into a spiral, the inner ones turning faster
+  float sw = th + 0.9 * log(1.0 + rn * 12.0) - uSpin / (0.25 + rn);
+  vec2 cs = vec2(cos(sw), sin(sw));
+  float wob = fbm(vec3(cs * 1.6, rn * 3.0));
+  float lines = 0.5 + 0.5 * sin(rn * 62.0 + wob * 9.0);
+  lines = lines * lines * lines;
+  float bands = fbm(vec3(rn * 8.0, cs * 0.9));
+  float dust = fbm(vec3(vW / uNep * 3.2, 1.7));
+  float dens = clamp(0.62 * bands + 0.32 * lines * (0.5 + bands) + 0.40 * (dust - 0.35), 0.0, 1.4);
+  // sunlit: bright near the Sun, a long faint reach, then the dark
+  float lit = 1.5 * exp(-rn * 6.5) + 0.85 * exp(-rn * 2.3) + 0.10;
+  float edge = (1.0 - smoothstep(0.72, 1.3, rn)) * smoothstep(0.0, 0.025, rn);
+  vec3 tone = mix(vec3(1.0, 0.86, 0.62), vec3(0.52, 0.44, 0.37), smoothstep(0.02, 0.7, rn));
+  // seen edge-on, the eye looks through more of it
+  float mu = abs(dot(normalize(vV), uN));
+  float thick = min(1.0 / (0.32 + 0.68 * mu), 2.4);
+  float sh = shade(vW);
+  vec3 col = tone * lit * dens * thick * edge * sh * 0.5;
+  float a = clamp(dens * (0.18 + 0.42 * exp(-rn * 1.4)) * thick * edge, 0.0, 0.75) * 0.55;
+  gl_FragColor = vec4(max(col + dither(gl_FragCoord.xy) / 255.0 * edge, 0.0), a) * uAlpha;
+}
+float shade(vec2 w) { return 1.0; }
+`;
+
   // a soft light, added: the glow that lets a two-pixel planet be seen
   const F_GLOW = F_HEAD + `
 varying vec2 vQ;
@@ -2013,6 +2065,7 @@ void main() {
       program('sun', V_BODY, F_SUN, ['aCorner']);
       program('glow', V_BODY, F_GLOW, ['aCorner']);
       program('bloom', V_BODY, F_BLOOM, ['aCorner']);
+      program('disk', V_DISK, F_DISK, ['aCorner']);
       program('ring', V_RING, F_RING, ['aCorner']);
       program('tail', V_TAIL, F_TAIL, ['aCorner']);
       program('sky', V_FULL, F_SKY, ['aCorner']);
@@ -3053,6 +3106,23 @@ void main() {
     quad1();
   }
 
+  // how much of the dust disk shows: none on the journey (the plane is going
+  // somewhere), none beside a single world or out among the stars
+  const diskK = () => SUN.shown
+    ? (1 - journeyK) * smooth(lg(0.25), lg(2.5), lg(dist)) * (1 - smooth(lg(160), lg(520), lg(dist)))
+    : 0;
+  function drawDisk(k) {
+    use(PR.disk);
+    const nep = mapR(30.07);
+    u3('uO', [SUN.dp[0] - cam.pos[0], SUN.dp[1] - cam.pos[1], SUN.dp[2] - cam.pos[2]]);
+    u3('uRt', cam.rt); u3('uUp', cam.up); u3('uFw', cam.fw);
+    u3('uN', turn([0, 1, 0], _a));
+    u1('uR', nep * 1.34); u1('uNep', nep);
+    u1('uSpin', REDUCED ? 0 : realT * 0.006);
+    u1('uAlpha', k);
+    quad1();
+  }
+
   function drawShell(k) {
     const R = mapR(HELIOPAUSE), v = SUN.v, dd = SUN.dd;
     use(PR.shell);
@@ -3170,6 +3240,10 @@ void main() {
     // the edge of the Sun's wind
     const shell = shellK();
     if (shell > 0.003) { lens(PR.shell); drawShell(shell); }
+
+    // the dust disk, under everything that stands on it
+    const disk = diskK();
+    if (disk > 0.003) { lens(PR.disk); drawDisk(disk); }
 
     // the small bodies
     lens(PR.belt);
